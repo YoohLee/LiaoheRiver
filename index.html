@@ -1,0 +1,1889 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>排水站安全检测记录系统</title>
+    <!-- 引入CDN依赖 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <!-- Tailwind配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#0E42D2',
+                        neutral: '#F5F7FA',
+                    },
+                    fontSize: {
+                        'form': '16px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .btn-primary {
+                @apply bg-primary text-white font-medium py-3 px-4 rounded-lg w-full active:bg-secondary transition-all;
+            }
+            .btn-secondary {
+                @apply bg-white border border-primary text-primary font-medium py-3 px-4 rounded-lg w-full active:bg-neutral transition-all;
+            }
+            .input-base {
+                @apply w-full px-3 py-3 border border-gray-300 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none text-form;
+            }
+            .form-item {
+                @apply mb-4;
+            }
+            .form-label {
+                @apply block text-gray-700 font-medium mb-1 text-sm;
+            }
+            .tab-active {
+                @apply text-primary border-b-2 border-primary font-medium;
+            }
+            .tab-inactive {
+                @apply text-gray-500 border-b-2 border-transparent;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen pb-20">
+    <!-- 顶部标题 -->
+    <header class="bg-primary text-white py-4 px-4 sticky top-0 z-50 shadow-md">
+        <h1 class="text-xl font-bold text-center">排水站安全检测记录系统</h1>
+    </header>
+
+    <!-- 标签页导航 -->
+    <div class="overflow-x-auto bg-white shadow-sm sticky top-[60px] z-40">
+        <div class="flex whitespace-nowrap px-2" id="tabNav">
+            <div class="tab-item tab-active px-4 py-3 text-sm" data-tab="base">泵站基础</div>
+            <div class="tab-item tab-inactive px-4 py-3 text-sm" data-tab="appearance">外观检测</div>
+            <div class="tab-item tab-inactive px-4 py-3 text-sm" data-tab="section">断面尺寸</div>
+            <div class="tab-item tab-inactive px-4 py-3 text-sm" data-tab="rebound">回弹碳化</div>
+            <div class="tab-item tab-inactive px-4 py-3 text-sm" data-tab="protective">保护层</div>
+            <div class="tab-item tab-inactive px-4 py-3 text-sm" data-tab="metal">金属结构</div>
+            <div class="tab-item tab-inactive px-4 py-3 text-sm" data-tab="electrical">机械电气</div>
+            <div class="tab-item tab-inactive px-4 py-3 text-sm" data-tab="safety">安全评定</div>
+            <div class="tab-item tab-inactive px-4 py-3 text-sm" data-tab="problem">问题台账</div>
+            <div class="tab-item tab-inactive px-4 py-3 text-sm" data-tab="export">导出数据</div>
+        </div>
+    </div>
+
+    <!-- 内容容器 -->
+    <main class="px-4 py-4">
+        <!-- 1. 泵站基础信息页 -->
+        <section class="tab-content" id="tab-base">
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">泵站基础信息</h2>
+                <div class="form-item">
+                    <label class="form-label">选择泵站</label>
+                    <select class="input-base" id="pumpStationSelect">
+                        <option value="">请选择检测泵站</option>
+                    </select>
+                </div>
+                <div id="stationBaseInfo" class="mt-4 p-3 bg-neutral rounded-lg hidden">
+                    <p class="text-sm text-gray-600 mb-1"><span class="font-medium">路线序号：</span><span id="routeNo">-</span></p>
+                    <p class="text-sm text-gray-600 mb-1"><span class="font-medium">设计流量：</span><span id="designFlow">-</span></p>
+                    <p class="text-sm text-gray-600 mb-1"><span class="font-medium">建设性质：</span><span id="buildType">-</span></p>
+                    <p class="text-sm text-gray-600"><span class="font-medium">现场坐标：</span><span id="gps">-</span></p>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h3 class="text-md font-bold text-gray-800 mb-3">泵站列表</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-neutral text-gray-700">
+                            <tr>
+                                <th class="p-2 rounded-l-lg">序号</th>
+                                <th class="p-2">泵站名称</th>
+                                <th class="p-2 rounded-r-lg">设计流量</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stationTableBody" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. 外观检测页 -->
+        <section class="tab-content hidden" id="tab-appearance">
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">外观质量检测</h2>
+                <form id="appearanceForm">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">路线序号</label>
+                            <input type="number" class="input-base" id="app_routeNo" readonly>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">泵站名称</label>
+                            <input type="text" class="input-base" id="app_stationName" readonly>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">分项工程</label>
+                            <select class="input-base" id="app_subProject" required>
+                                <option value="">请选择</option>
+                                <option value="排水闸">排水闸</option>
+                                <option value="进水池">进水池</option>
+                                <option value="进水闸">进水闸</option>
+                                <option value="压力箱">压力箱</option>
+                                <option value="金属结构/机械电气">金属结构/机械电气</option>
+                            </select>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">检测部位</label>
+                            <select class="input-base" id="app_part" required>
+                                <option value="">请先选分项工程</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">材质类型</label>
+                        <select class="input-base" id="app_material">
+                            <option value="钢筋混凝土">钢筋混凝土</option>
+                            <option value="浆砌石">浆砌石</option>
+                            <option value="金属/机电设备">金属/机电设备</option>
+                            <option value="现场确认">现场确认</option>
+                        </select>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">检测结果</label>
+                        <select class="input-base" id="app_result" required>
+                            <option value="未见明显缺陷">未见明显缺陷</option>
+                            <option value="裂缝">裂缝</option>
+                            <option value="麻面">麻面</option>
+                            <option value="剥蚀">剥蚀</option>
+                            <option value="露筋">露筋</option>
+                            <option value="渗漏">渗漏</option>
+                            <option value="冲刷">冲刷</option>
+                            <option value="锈蚀">锈蚀</option>
+                            <option value="变形">变形</option>
+                            <option value="防腐脱落">防腐脱落</option>
+                            <option value="运行异常">运行异常</option>
+                            <option value="未见异常">未见异常</option>
+                        </select>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">现场拍照</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="file" id="app_camera" accept="image/*" capture="camera" class="hidden">
+                            <button type="button" id="app_takePhoto" class="btn-secondary">📷 拍摄照片</button>
+                            <button type="button" id="app_clearPhoto" class="btn-secondary">清除照片</button>
+                        </div>
+                        <div id="app_photoPreview" class="mt-3 hidden">
+                            <p class="text-xs text-gray-500 mb-1">照片预览（编号：<span id="app_photoNo"></span>）</p>
+                            <img id="app_photoImg" class="w-full h-40 object-contain border rounded-lg" src="" alt="现场照片">
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">备注</label>
+                        <input type="text" class="input-base" id="app_remark" placeholder="不存在该部位时填“不适用”">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mt-6">
+                        <button type="button" id="app_reset" class="btn-secondary">重置表单</button>
+                        <button type="submit" class="btn-primary">保存记录</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h3 class="text-md font-bold text-gray-800 mb-3">已保存外观记录</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-neutral text-gray-700">
+                            <tr>
+                                <th class="p-2 rounded-l-lg">泵站</th>
+                                <th class="p-2">部位</th>
+                                <th class="p-2">结果</th>
+                                <th class="p-2 rounded-r-lg">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="appearanceTableBody" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. 断面尺寸检测页 -->
+        <section class="tab-content hidden" id="tab-section">
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">断面尺寸检测</h2>
+                <form id="sectionForm">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">路线序号</label>
+                            <input type="number" class="input-base" id="sec_routeNo" readonly>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">泵站名称</label>
+                            <input type="text" class="input-base" id="sec_stationName" readonly>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">分项工程</label>
+                            <select class="input-base" id="sec_subProject" required>
+                                <option value="">请选择</option>
+                                <option value="排水闸">排水闸</option>
+                                <option value="进水池">进水池</option>
+                                <option value="进水闸">进水闸</option>
+                            </select>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">检测部位</label>
+                            <select class="input-base" id="sec_part" required>
+                                <option value="">请先选分项工程</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">参数名称</label>
+                        <select class="input-base" id="sec_param">
+                            <option value="宽度">宽度</option>
+                            <option value="厚度">厚度</option>
+                            <option value="长度">长度</option>
+                            <option value="高度">高度</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">单位</label>
+                            <select class="input-base" id="sec_unit">
+                                <option value="m">m</option>
+                                <option value="cm">cm</option>
+                            </select>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">检测值</label>
+                            <input type="number" step="0.001" class="input-base" id="sec_testValue">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">设计值</label>
+                            <input type="number" step="0.001" class="input-base" id="sec_designValue">
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">偏差值</label>
+                        <input type="number" step="0.001" class="input-base" id="sec_deviation" readonly>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">备注</label>
+                        <input type="text" class="input-base" id="sec_remark">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mt-6">
+                        <button type="button" id="sec_reset" class="btn-secondary">重置表单</button>
+                        <button type="submit" class="btn-primary">保存记录</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h3 class="text-md font-bold text-gray-800 mb-3">已保存断面尺寸记录</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-neutral text-gray-700">
+                            <tr>
+                                <th class="p-2 rounded-l-lg">泵站</th>
+                                <th class="p-2">部位</th>
+                                <th class="p-2">检测值</th>
+                                <th class="p-2 rounded-r-lg">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sectionTableBody" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. 回弹碳化检测页 -->
+        <section class="tab-content hidden" id="tab-rebound">
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">回弹碳化检测</h2>
+                <form id="reboundForm">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">路线序号</label>
+                            <input type="number" class="input-base" id="reb_routeNo" readonly>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">泵站名称</label>
+                            <input type="text" class="input-base" id="reb_stationName" readonly>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">分项工程</label>
+                            <select class="input-base" id="reb_subProject" required>
+                                <option value="">请选择</option>
+                                <option value="排水闸">排水闸</option>
+                                <option value="进水池">进水池</option>
+                                <option value="进水闸">进水闸</option>
+                                <option value="压力箱">压力箱</option>
+                            </select>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">检测部位</label>
+                            <select class="input-base" id="reb_part" required>
+                                <option value="">请先选分项工程</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">碳化深度(mm)</label>
+                            <input type="number" step="0.01" class="input-base" id="reb_carbonDepth">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">最小强度(MPa)</label>
+                            <input type="number" step="0.01" class="input-base" id="reb_minStrength">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">平均强度(MPa)</label>
+                            <input type="number" step="0.01" class="input-base" id="reb_avgStrength">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">标准差(MPa)</label>
+                            <input type="number" step="0.01" class="input-base" id="reb_stdDev">
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">推定强度(MPa)</label>
+                        <input type="number" step="0.01" class="input-base" id="reb_predictStrength">
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">结果描述</label>
+                        <textarea class="input-base h-20" id="reb_resultDesc" placeholder="填写检测结果描述"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mt-6">
+                        <button type="button" id="reb_reset" class="btn-secondary">重置表单</button>
+                        <button type="submit" class="btn-primary">保存记录</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h3 class="text-md font-bold text-gray-800 mb-3">已保存回弹碳化记录</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-neutral text-gray-700">
+                            <tr>
+                                <th class="p-2 rounded-l-lg">泵站</th>
+                                <th class="p-2">部位</th>
+                                <th class="p-2">平均强度</th>
+                                <th class="p-2 rounded-r-lg">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reboundTableBody" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. 保护层检测页 -->
+        <section class="tab-content hidden" id="tab-protective">
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">钢筋保护层检测</h2>
+                <form id="protectiveForm">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">路线序号</label>
+                            <input type="number" class="input-base" id="pro_routeNo" readonly>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">泵站名称</label>
+                            <input type="text" class="input-base" id="pro_stationName" readonly>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">分项工程</label>
+                            <select class="input-base" id="pro_subProject" required>
+                                <option value="">请选择</option>
+                                <option value="排水闸">排水闸</option>
+                                <option value="进水池">进水池</option>
+                                <option value="进水闸">进水闸</option>
+                                <option value="压力箱">压力箱</option>
+                            </select>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">检测部位</label>
+                            <select class="input-base" id="pro_part" required>
+                                <option value="">请先选分项工程</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">保护层最大值(mm)</label>
+                            <input type="number" step="0.01" class="input-base" id="pro_proMax">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">保护层最小值(mm)</label>
+                            <input type="number" step="0.01" class="input-base" id="pro_proMin">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">钢筋间距最大值(mm)</label>
+                            <input type="number" step="0.01" class="input-base" id="pro_spaceMax">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">钢筋间距最小值(mm)</label>
+                            <input type="number" step="0.01" class="input-base" id="pro_spaceMin">
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">结果描述</label>
+                        <textarea class="input-base h-20" id="pro_resultDesc" placeholder="填写检测结果描述"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mt-6">
+                        <button type="button" id="pro_reset" class="btn-secondary">重置表单</button>
+                        <button type="submit" class="btn-primary">保存记录</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h3 class="text-md font-bold text-gray-800 mb-3">已保存保护层记录</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-neutral text-gray-700">
+                            <tr>
+                                <th class="p-2 rounded-l-lg">泵站</th>
+                                <th class="p-2">部位</th>
+                                <th class="p-2">保护层最值</th>
+                                <th class="p-2 rounded-r-lg">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="protectiveTableBody" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. 金属结构检测页 -->
+        <section class="tab-content hidden" id="tab-metal">
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">金属结构检测</h2>
+                <form id="metalForm">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">路线序号</label>
+                            <input type="number" class="input-base" id="met_routeNo" readonly>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">泵站名称</label>
+                            <input type="text" class="input-base" id="met_stationName" readonly>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">设备类别</label>
+                            <select class="input-base" id="met_deviceType" required>
+                                <option value="">请选择</option>
+                                <option value="排水闸闸门">排水闸闸门</option>
+                                <option value="进水闸闸门">进水闸闸门</option>
+                                <option value="启闭机">启闭机</option>
+                                <option value="拦污栅">拦污栅</option>
+                                <option value="钢管/拍门">钢管/拍门</option>
+                            </select>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">数量</label>
+                            <input type="number" class="input-base" id="met_count">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">规格/尺寸</label>
+                            <input type="text" class="input-base" id="met_spec">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">生产厂家</label>
+                            <input type="text" class="input-base" id="met_factory">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">型号/编号</label>
+                            <input type="text" class="input-base" id="met_model">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">出厂日期</label>
+                            <input type="date" class="input-base" id="met_produceDate">
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">外观与运行描述</label>
+                        <textarea class="input-base h-20" id="met_desc" placeholder="填写外观与运行状态描述"></textarea>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">建议类别</label>
+                        <select class="input-base" id="met_suggest">
+                            <option value="无">无</option>
+                            <option value="维护">维护</option>
+                            <option value="维修">维修</option>
+                            <option value="更换">更换</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mt-6">
+                        <button type="button" id="met_reset" class="btn-secondary">重置表单</button>
+                        <button type="submit" class="btn-primary">保存记录</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h3 class="text-md font-bold text-gray-800 mb-3">已保存金属结构记录</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-neutral text-gray-700">
+                            <tr>
+                                <th class="p-2 rounded-l-lg">泵站</th>
+                                <th class="p-2">设备类型</th>
+                                <th class="p-2">建议</th>
+                                <th class="p-2 rounded-r-lg">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="metalTableBody" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 7. 机械电气检测页 -->
+        <section class="tab-content hidden" id="tab-electrical">
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">机械电气检测</h2>
+                <form id="electricalForm">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">路线序号</label>
+                            <input type="number" class="input-base" id="ele_routeNo" readonly>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">泵站名称</label>
+                            <input type="text" class="input-base" id="ele_stationName" readonly>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">设备类别</label>
+                            <select class="input-base" id="ele_deviceType" required>
+                                <option value="">请选择</option>
+                                <option value="水泵">水泵</option>
+                                <option value="电动机">电动机</option>
+                                <option value="配电柜">配电柜</option>
+                                <option value="电缆/接地/照明">电缆/接地/照明</option>
+                            </select>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">数量</label>
+                            <input type="number" class="input-base" id="ele_count">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">生产厂家</label>
+                            <input type="text" class="input-base" id="ele_factory">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">型号/编号</label>
+                            <input type="text" class="input-base" id="ele_model">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">绝缘电阻MΩ</label>
+                            <input type="number" step="0.01" class="input-base" id="ele_insulation">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">接地电阻Ω</label>
+                            <input type="number" step="0.01" class="input-base" id="ele_ground">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">试运行状态</label>
+                            <select class="input-base" id="ele_runStatus">
+                                <option value="未试">未试</option>
+                                <option value="正常">正常</option>
+                                <option value="异常">异常</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">外观与运行描述</label>
+                        <textarea class="input-base h-20" id="ele_desc" placeholder="填写外观与运行状态描述"></textarea>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">建议类别</label>
+                        <select class="input-base" id="ele_suggest">
+                            <option value="无">无</option>
+                            <option value="维护">维护</option>
+                            <option value="维修">维修</option>
+                            <option value="更换">更换</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mt-6">
+                        <button type="button" id="ele_reset" class="btn-secondary">重置表单</button>
+                        <button type="submit" class="btn-primary">保存记录</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h3 class="text-md font-bold text-gray-800 mb-3">已保存机械电气记录</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-neutral text-gray-700">
+                            <tr>
+                                <th class="p-2 rounded-l-lg">泵站</th>
+                                <th class="p-2">设备类型</th>
+                                <th class="p-2">运行状态</th>
+                                <th class="p-2 rounded-r-lg">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="electricalTableBody" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 8. 安全评定页 -->
+        <section class="tab-content hidden" id="tab-safety">
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">安全类别评定</h2>
+                <form id="safetyForm">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">路线序号</label>
+                            <input type="number" class="input-base" id="saf_routeNo" readonly>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">泵站名称</label>
+                            <input type="text" class="input-base" id="saf_stationName" readonly>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">工程类别</label>
+                            <select class="input-base" id="saf_projectType" required>
+                                <option value="">请选择</option>
+                                <option value="建筑物">建筑物</option>
+                                <option value="金属结构">金属结构</option>
+                                <option value="机械电气">机械电气</option>
+                            </select>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">分项工程名称</label>
+                            <select class="input-base" id="saf_subProject" required>
+                                <option value="">请先选工程类别</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">评定条款或标准</label>
+                        <input type="text" class="input-base" id="saf_standard" placeholder="如：表C.0.1-4">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">分项工程建议安全类别</label>
+                            <select class="input-base" id="saf_subLevel">
+                                <option value="一类">一类</option>
+                                <option value="二类">二类</option>
+                                <option value="三类">三类</option>
+                                <option value="四类">四类</option>
+                            </select>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">工程建议安全类别</label>
+                            <select class="input-base" id="saf_projectLevel">
+                                <option value="一类">一类</option>
+                                <option value="二类">二类</option>
+                                <option value="三类">三类</option>
+                                <option value="四类">四类</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">安全评估/建议类别</label>
+                        <select class="input-base" id="saf_suggestLevel">
+                            <option value="一类">一类</option>
+                            <option value="二类">二类</option>
+                            <option value="三类">三类</option>
+                            <option value="四类">四类</option>
+                        </select>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">判定依据/主要问题</label>
+                        <textarea class="input-base h-20" id="saf_basis" placeholder="填写判定依据或主要存在问题"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mt-6">
+                        <button type="button" id="saf_reset" class="btn-secondary">重置表单</button>
+                        <button type="submit" class="btn-primary">保存记录</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h3 class="text-md font-bold text-gray-800 mb-3">已保存安全评定记录</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-neutral text-gray-700">
+                            <tr>
+                                <th class="p-2 rounded-l-lg">泵站</th>
+                                <th class="p-2">分项工程</th>
+                                <th class="p-2">安全类别</th>
+                                <th class="p-2 rounded-r-lg">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="safetyTableBody" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 9. 问题台账页 -->
+        <section class="tab-content hidden" id="tab-problem">
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">问题台账</h2>
+                <form id="problemForm">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">问题编号</label>
+                            <input type="number" class="input-base" id="prob_id" readonly>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">路线序号</label>
+                            <input type="number" class="input-base" id="prob_routeNo" readonly>
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">泵站名称</label>
+                        <input type="text" class="input-base" id="prob_stationName" readonly>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">问题类别</label>
+                            <select class="input-base" id="prob_type" required>
+                                <option value="">请选择</option>
+                                <option value="结构">结构</option>
+                                <option value="金属">金属</option>
+                                <option value="机电">机电</option>
+                                <option value="电气">电气</option>
+                                <option value="安全">安全</option>
+                                <option value="资料">资料</option>
+                            </select>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">严重程度</label>
+                            <select class="input-base" id="prob_level">
+                                <option value="一般">一般</option>
+                                <option value="较重">较重</option>
+                                <option value="严重">严重</option>
+                                <option value="重大">重大</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">分项工程</label>
+                            <input type="text" class="input-base" id="prob_subProject">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">检测部位</label>
+                            <input type="text" class="input-base" id="prob_part">
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">问题描述</label>
+                        <textarea class="input-base h-20" id="prob_desc" required placeholder="详细描述问题情况"></textarea>
+                    </div>
+                    <div class="form-item">
+                        <label class="form-label">建议措施</label>
+                        <textarea class="input-base h-20" id="prob_suggest" placeholder="填写整改建议措施"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">是否影响类别</label>
+                            <select class="input-base" id="prob_affect">
+                                <option value="否">否</option>
+                                <option value="是">是</option>
+                            </select>
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">是否需复核</label>
+                            <select class="input-base" id="prob_recheck">
+                                <option value="否">否</option>
+                                <option value="是">是</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">责任/对接人</label>
+                            <input type="text" class="input-base" id="prob_principal">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">状态</label>
+                            <select class="input-base" id="prob_status">
+                                <option value="待处理">待处理</option>
+                                <option value="处理中">处理中</option>
+                                <option value="已完成">已完成</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mt-6">
+                        <button type="button" id="prob_reset" class="btn-secondary">重置表单</button>
+                        <button type="submit" class="btn-primary">保存记录</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h3 class="text-md font-bold text-gray-800 mb-3">问题台账列表</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-neutral text-gray-700">
+                            <tr>
+                                <th class="p-2 rounded-l-lg">编号</th>
+                                <th class="p-2">泵站</th>
+                                <th class="p-2">问题类型</th>
+                                <th class="p-2">状态</th>
+                                <th class="p-2 rounded-r-lg">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="problemTableBody" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 10. 导出数据页 -->
+        <section class="tab-content hidden" id="tab-export">
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">数据导出</h2>
+                <div class="mb-6">
+                    <p class="text-sm text-gray-600 mb-4">点击下方按钮，一键导出所有检测数据为标准Excel文件，完全匹配台账格式</p>
+                    <button id="exportExcelBtn" class="btn-primary mb-3">📊 导出Excel检测台账</button>
+                    <button id="exportPhotoBtn" class="btn-secondary">🖼️ 导出照片压缩包</button>
+                </div>
+                <div class="p-3 bg-neutral rounded-lg">
+                    <h3 class="font-medium text-gray-800 mb-2">数据统计</h3>
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div class="p-2 bg-white rounded-lg">
+                            <p class="text-gray-500">外观检测记录</p>
+                            <p class="text-xl font-bold text-primary" id="count_appearance">0</p>
+                        </div>
+                        <div class="p-2 bg-white rounded-lg">
+                            <p class="text-gray-500">断面尺寸记录</p>
+                            <p class="text-xl font-bold text-primary" id="count_section">0</p>
+                        </div>
+                        <div class="p-2 bg-white rounded-lg">
+                            <p class="text-gray-500">回弹碳化记录</p>
+                            <p class="text-xl font-bold text-primary" id="count_rebound">0</p>
+                        </div>
+                        <div class="p-2 bg-white rounded-lg">
+                            <p class="text-gray-500">保护层记录</p>
+                            <p class="text-xl font-bold text-primary" id="count_protective">0</p>
+                        </div>
+                        <div class="p-2 bg-white rounded-lg">
+                            <p class="text-gray-500">金属结构记录</p>
+                            <p class="text-xl font-bold text-primary" id="count_metal">0</p>
+                        </div>
+                        <div class="p-2 bg-white rounded-lg">
+                            <p class="text-gray-500">机械电气记录</p>
+                            <p class="text-xl font-bold text-primary" id="count_electrical">0</p>
+                        </div>
+                        <div class="p-2 bg-white rounded-lg">
+                            <p class="text-gray-500">安全评定记录</p>
+                            <p class="text-xl font-bold text-primary" id="count_safety">0</p>
+                        </div>
+                        <div class="p-2 bg-white rounded-lg">
+                            <p class="text-gray-500">问题台账记录</p>
+                            <p class="text-xl font-bold text-primary" id="count_problem">0</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h3 class="text-md font-bold text-gray-800 mb-3">数据管理</h3>
+                <div class="space-y-3">
+                    <button id="clearAllDataBtn" class="btn-secondary border-red-500 text-red-500">⚠️ 清空所有本地数据</button>
+                    <p class="text-xs text-red-500">注意：清空数据后不可恢复，请谨慎操作！</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 底部固定操作栏 -->
+    <footer class="fixed bottom-0 left-0 right-0 bg-white shadow-lg border-t border-gray-200 p-3 z-50">
+        <div class="grid grid-cols-2 gap-3">
+            <button id="prevTabBtn" class="btn-secondary">上一页</button>
+            <button id="nextTabBtn" class="btn-primary">下一页</button>
+        </div>
+    </footer>
+
+    <script>
+        // 预设泵站基础数据
+        const pumpStations = [
+            { routeNo: 1, name: "下万排水站", designFlow: "7.5m³/s", buildType: "维修改造", gps: "41.505968，122.640043" },
+            { routeNo: 2, name: "瓜茄排水站", designFlow: "1.8m³/s", buildType: "维修改造", gps: "41.511976，122.601002" },
+            { routeNo: 3, name: "暴家沟排水站", designFlow: "6.0m³/s", buildType: "维修改造", gps: "41.512413，122.592116" },
+            { routeNo: 4, name: "嫩草坡排水站", designFlow: "7.2m³/s", buildType: "维修改造", gps: "41.536568，122.507445" },
+            { routeNo: 5, name: "刘家排水站", designFlow: "1.8m³/s", buildType: "维修改造", gps: "41.542049，122.495937" },
+            { routeNo: 6, name: "闵家排水站", designFlow: "1.8m³/s", buildType: "维修改造", gps: "41.566777，122.486237" },
+            { routeNo: 7, name: "杨家店排水站", designFlow: "7.2m³/s", buildType: "维修改造", gps: "41.541753，122.553448" },
+            { routeNo: 8, name: "老虎排水站", designFlow: "4.0m³/s", buildType: "维修改造", gps: "41.546131，122.55385" },
+            { routeNo: 9, name: "榆树排水站", designFlow: "8.8m³/s", buildType: "拆除重建", gps: "41.585956，122.49074" },
+            { routeNo: 10, name: "于家排水站", designFlow: "2.4m³/s", buildType: "维修改造", gps: "41.598537，122.548836" },
+            { routeNo: 11, name: "达连泡排水站", designFlow: "1.2m³/s", buildType: "维修改造", gps: "41.611208，122.568955" },
+            { routeNo: 12, name: "鸭子场排水站", designFlow: "1.8m³/s", buildType: "维修改造", gps: "41.626475，122.540256" },
+            { routeNo: 13, name: "小暴家排水站", designFlow: "1.8m³/s", buildType: "维修改造", gps: "41.628635，122.57594" },
+            { routeNo: 14, name: "宁家排水站", designFlow: "1.8m³/s", buildType: "维修改造", gps: "41.632564，122.594926" },
+            { routeNo: 15, name: "东于排水站", designFlow: "2.4m³/s", buildType: "维修改造", gps: "41.688294，122.617185" },
+            { routeNo: 16, name: "夏屯排水站", designFlow: "9.6m³/s", buildType: "维修改造", gps: "41.66662，122.575484" },
+            { routeNo: 17, name: "农场排水站", designFlow: "2.4m³/s", buildType: "维修改造", gps: "41.756753，122.587984" },
+            { routeNo: 18, name: "双岗排水站", designFlow: "2.4m³/s", buildType: "维修改造", gps: "41.766476，122.60039" },
+            { routeNo: 19, name: "灰山排水站", designFlow: "1.2m³/s", buildType: "拆除重建", gps: "41.697587，122.63862" },
+            { routeNo: 20, name: "十间房排水站", designFlow: "1.2m³/s", buildType: "维修改造", gps: "41.531488，122.608248" }
+        ];
+
+        // 检测部位映射
+        const partMap = {
+            appearance: {
+                "排水闸": ["工作桥桥面", "启闭机操作平台", "排架柱", "闸墩/边墙", "胸墙/挡墙", "出口护坡/底板"],
+                "进水池": ["左侧护坡/挡墙", "右侧护坡/挡墙", "泵站墩柱"],
+                "进水闸": ["操作平台/工作桥", "闸墩/门槽", "排架柱", "护坡/挡墙"],
+                "压力箱": ["左边墙", "右边墙", "底板", "分水墩"],
+                "金属结构/机械电气": ["闸门", "启闭机", "拦污栅", "水泵及钢管", "电动机及配电柜"]
+            },
+            section: {
+                "排水闸": ["工作桥桥面", "启闭机操作平台", "排架柱", "闸墩/边墙", "胸墙/挡墙", "出口护坡/底板"],
+                "进水池": ["左侧护坡/挡墙", "右侧护坡/挡墙"],
+                "进水闸": ["操作平台/工作桥", "闸墩/门槽"]
+            },
+            rebound: {
+                "排水闸": ["工作桥桥面", "启闭机操作平台", "排架柱", "闸墩/边墙", "胸墙/挡墙"],
+                "进水池": ["左侧护坡/挡墙", "右侧护坡/挡墙", "泵站墩柱"],
+                "进水闸": ["操作平台/工作桥", "闸墩/门槽", "排架柱", "护坡/挡墙"],
+                "压力箱": ["左边墙", "右边墙"]
+            },
+            protective: {
+                "排水闸": ["工作桥桥面", "启闭机操作平台"],
+                "进水池": ["左侧护坡/挡墙", "右侧护坡/挡墙"],
+                "进水闸": ["操作平台/工作桥", "闸墩/门槽"],
+                "压力箱": ["左边墙", "右边墙"]
+            },
+            safety: {
+                "建筑物": ["排水闸", "进水池", "进水闸"],
+                "金属结构": ["闸门"],
+                "机械电气": ["电动机"]
+            }
+        };
+
+        // 本地存储key
+        const STORAGE_KEY = "pumpStationDetectionData";
+        let globalData = {
+            selectedStation: null,
+            appearance: [],
+            section: [],
+            rebound: [],
+            protective: [],
+            metal: [],
+            electrical: [],
+            safety: [],
+            problem: [],
+            photos: []
+        };
+
+        // 初始化加载数据
+        function initData() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                globalData = JSON.parse(saved);
+            }
+            renderStationList();
+            renderAllTables();
+            updateCount();
+        }
+
+        // 保存数据到本地
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(globalData));
+            renderAllTables();
+            updateCount();
+        }
+
+        // 渲染泵站列表
+        function renderStationList() {
+            const select = document.getElementById("pumpStationSelect");
+            const tbody = document.getElementById("stationTableBody");
+            
+            // 清空
+            select.innerHTML = '<option value="">请选择检测泵站</option>';
+            tbody.innerHTML = '';
+
+            pumpStations.forEach(station => {
+                // 下拉框
+                const option = document.createElement("option");
+                option.value = station.routeNo;
+                option.textContent = station.name;
+                select.appendChild(option);
+
+                // 表格
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${station.routeNo}</td>
+                    <td class="p-2">${station.name}</td>
+                    <td class="p-2">${station.designFlow}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // 选中已选泵站
+            if (globalData.selectedStation) {
+                select.value = globalData.selectedStation.routeNo;
+                renderStationInfo(globalData.selectedStation);
+            }
+        }
+
+        // 渲染泵站基础信息
+        function renderStationInfo(station) {
+            document.getElementById("routeNo").textContent = station.routeNo;
+            document.getElementById("designFlow").textContent = station.designFlow;
+            document.getElementById("buildType").textContent = station.buildType;
+            document.getElementById("gps").textContent = station.gps;
+            document.getElementById("stationBaseInfo").classList.remove("hidden");
+
+            // 填充所有表单的泵站信息
+            const fields = [
+                { route: "app_routeNo", name: "app_stationName" },
+                { route: "sec_routeNo", name: "sec_stationName" },
+                { route: "reb_routeNo", name: "reb_stationName" },
+                { route: "pro_routeNo", name: "pro_stationName" },
+                { route: "met_routeNo", name: "met_stationName" },
+                { route: "ele_routeNo", name: "ele_stationName" },
+                { route: "saf_routeNo", name: "saf_stationName" },
+                { route: "prob_routeNo", name: "prob_stationName" }
+            ];
+
+            fields.forEach(field => {
+                document.getElementById(field.route).value = station.routeNo;
+                document.getElementById(field.name).value = station.name;
+            });
+
+            // 问题编号
+            document.getElementById("prob_id").value = globalData.problem.length + 1;
+        }
+
+        // 渲染部位下拉框
+        function renderPartSelect(type, subProjectKey, partKey) {
+            const subProject = document.getElementById(subProjectKey).value;
+            const partSelect = document.getElementById(partKey);
+            
+            if (!subProject || !partMap[type][subProject]) {
+                partSelect.innerHTML = '<option value="">请先选分项工程</option>';
+                return;
+            }
+
+            partSelect.innerHTML = '';
+            partMap[type][subProject].forEach(part => {
+                const option = document.createElement("option");
+                option.value = part;
+                option.textContent = part;
+                partSelect.appendChild(option);
+            });
+        }
+
+        // 渲染所有表格
+        function renderAllTables() {
+            renderAppearanceTable();
+            renderSectionTable();
+            renderReboundTable();
+            renderProtectiveTable();
+            renderMetalTable();
+            renderElectricalTable();
+            renderSafetyTable();
+            renderProblemTable();
+        }
+
+        // 外观表格渲染
+        function renderAppearanceTable() {
+            const tbody = document.getElementById("appearanceTableBody");
+            tbody.innerHTML = '';
+            globalData.appearance.forEach((item, index) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.part}</td>
+                    <td class="p-2">${item.result}</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="appearance" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 断面尺寸表格渲染
+        function renderSectionTable() {
+            const tbody = document.getElementById("sectionTableBody");
+            tbody.innerHTML = '';
+            globalData.section.forEach((item, index) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.part}</td>
+                    <td class="p-2">${item.testValue}${item.unit}</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="section" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 回弹碳化表格渲染
+        function renderReboundTable() {
+            const tbody = document.getElementById("reboundTableBody");
+            tbody.innerHTML = '';
+            globalData.rebound.forEach((item, index) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.part}</td>
+                    <td class="p-2">${item.avgStrength || '-'}MPa</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="rebound" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 保护层表格渲染
+        function renderProtectiveTable() {
+            const tbody = document.getElementById("protectiveTableBody");
+            tbody.innerHTML = '';
+            globalData.protective.forEach((item, index) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.part}</td>
+                    <td class="p-2">${item.proMin || '-'}-${item.proMax || '-'}mm</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="protective" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 金属结构表格渲染
+        function renderMetalTable() {
+            const tbody = document.getElementById("metalTableBody");
+            tbody.innerHTML = '';
+            globalData.metal.forEach((item, index) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.deviceType}</td>
+                    <td class="p-2">${item.suggest}</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="metal" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 机械电气表格渲染
+        function renderElectricalTable() {
+            const tbody = document.getElementById("electricalTableBody");
+            tbody.innerHTML = '';
+            globalData.electrical.forEach((item, index) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.deviceType}</td>
+                    <td class="p-2">${item.runStatus}</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="electrical" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 安全评定表格渲染
+        function renderSafetyTable() {
+            const tbody = document.getElementById("safetyTableBody");
+            tbody.innerHTML = '';
+            globalData.safety.forEach((item, index) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.subProject}</td>
+                    <td class="p-2">${item.subLevel}</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="safety" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 问题台账表格渲染
+        function renderProblemTable() {
+            const tbody = document.getElementById("problemTableBody");
+            tbody.innerHTML = '';
+            globalData.problem.forEach((item, index) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.id}</td>
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.type}</td>
+                    <td class="p-2">${item.status}</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="problem" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 更新统计数字
+        function updateCount() {
+            document.getElementById("count_appearance").textContent = globalData.appearance.length;
+            document.getElementById("count_section").textContent = globalData.section.length;
+            document.getElementById("count_rebound").textContent = globalData.rebound.length;
+            document.getElementById("count_protective").textContent = globalData.protective.length;
+            document.getElementById("count_metal").textContent = globalData.metal.length;
+            document.getElementById("count_electrical").textContent = globalData.electrical.length;
+            document.getElementById("count_safety").textContent = globalData.safety.length;
+            document.getElementById("count_problem").textContent = globalData.problem.length;
+        }
+
+        // 标签页切换
+        function switchTab(tabName) {
+            // 隐藏所有内容
+            document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
+            // 显示目标内容
+            document.getElementById(`tab-${tabName}`).classList.remove("hidden");
+            // 更新标签样式
+            document.querySelectorAll(".tab-item").forEach(el => {
+                if (el.dataset.tab === tabName) {
+                    el.classList.remove("tab-inactive");
+                    el.classList.add("tab-active");
+                } else {
+                    el.classList.remove("tab-active");
+                    el.classList.add("tab-inactive");
+                }
+            });
+            // 记录当前标签
+            window.currentTabIndex = Array.from(document.querySelectorAll(".tab-item")).findIndex(el => el.dataset.tab === tabName);
+        }
+
+        // 生成Excel
+        function generateExcel() {
+            const wb = XLSX.utils.book_new();
+
+            // 1. 外观检测Sheet
+            const appearanceHeader = ["路线序号", "泵站名称", "报告表号", "序号", "分项工程", "检测部位", "材质类型", "检测结果", "检测日期", "检测人", "照片编号", "是否关键项", "备注"];
+            const appearanceData = globalData.appearance.map((item, idx) => [
+                item.routeNo, item.stationName, `表${item.routeNo}-3-1`, idx+1, item.subProject, item.part, item.material, item.result, '', '', item.photoNo || '', '否', item.remark
+            ]);
+            const appearanceWs = XLSX.utils.aoa_to_sheet([appearanceHeader, ...appearanceData]);
+            XLSX.utils.book_append_sheet(wb, appearanceWs, "06外观检测");
+
+            // 2. 断面尺寸Sheet
+            const sectionHeader = ["路线序号", "泵站名称", "报告表号", "序号", "分项工程", "部位", "参数名称", "单位", "检测值", "设计值", "偏差", "照片/草图编号", "依据", "备注"];
+            const sectionData = globalData.section.map((item, idx) => [
+                item.routeNo, item.stationName, `表${item.routeNo}-3-1-1`, idx+1, item.subProject, item.part, item.param, item.unit, item.testValue, item.designValue, item.deviation, '', 'SL734-2016《水利工程质量检测技术规程》', item.remark
+            ]);
+            const sectionWs = XLSX.utils.aoa_to_sheet([sectionHeader, ...sectionData]);
+            XLSX.utils.book_append_sheet(wb, sectionWs, "07断面尺寸");
+
+            // 3. 回弹碳化Sheet
+            const reboundHeader = ["路线序号", "泵站名称", "报告表号", "序号", "分项工程", "检测部位", "碳化深度(mm)", "最小强度(MPa)", "平均强度(MPa)", "标准差(MPa)", "推定强度(MPa)", "原始记录编号", "结果描述句", "备注"];
+            const reboundData = globalData.rebound.map((item, idx) => [
+                item.routeNo, item.stationName, `表${item.routeNo}-3-${idx+1}-强度`, idx+1, item.subProject, item.part, item.carbonDepth, item.minStrength, item.avgStrength, item.stdDev, item.predictStrength, '', item.resultDesc, ''
+            ]);
+            const reboundWs = XLSX.utils.aoa_to_sheet([reboundHeader, ...reboundData]);
+            XLSX.utils.book_append_sheet(wb, reboundWs, "08回弹碳化");
+
+            // 4. 保护层Sheet
+            const protectiveHeader = ["路线序号", "泵站名称", "报告表号", "序号", "分项工程", "检测部位", "保护层最大值mm", "保护层最小值mm", "钢筋间距最大值mm", "钢筋间距最小值mm", "原始记录编号", "结果描述句", "备注"];
+            const protectiveData = globalData.protective.map((item, idx) => [
+                item.routeNo, item.stationName, `表${item.routeNo}-3-${idx+1}-保护层`, idx+1, item.subProject, item.part, item.proMax, item.proMin, item.spaceMax, item.spaceMin, '', item.resultDesc, ''
+            ]);
+            const protectiveWs = XLSX.utils.aoa_to_sheet([protectiveHeader, ...protectiveData]);
+            XLSX.utils.book_append_sheet(wb, protectiveWs, "10保护层");
+
+            // 5. 金属结构Sheet
+            const metalHeader = ["路线序号", "泵站名称", "报告小节", "设备类别", "数量", "规格/尺寸", "生产厂家", "型号/编号", "出厂日期", "外观与运行描述", "照片编号", "报告图号", "建议类别", "备注"];
+            const metalData = globalData.metal.map((item, idx) => [
+                item.routeNo, item.stationName, `${item.routeNo}.3 金属结构检测结果`, item.deviceType, item.count, item.spec, item.factory, item.model, item.produceDate, item.desc, '', `图${item.routeNo}-3-JS${idx+1}`, item.suggest, ''
+            ]);
+            const metalWs = XLSX.utils.aoa_to_sheet([metalHeader, ...metalData]);
+            XLSX.utils.book_append_sheet(wb, metalWs, "12金属结构");
+
+            // 6. 机械电气Sheet
+            const electricalHeader = ["路线序号", "泵站名称", "报告小节", "设备类别", "数量", "生产厂家", "型号/编号", "出厂日期", "绝缘电阻MΩ", "接地电阻Ω", "试运行状态", "外观与运行描述", "照片编号", "报告图号", "建议类别", "备注"];
+            const electricalData = globalData.electrical.map((item, idx) => [
+                item.routeNo, item.stationName, `${item.routeNo}.3 机械电气检测结果`, item.deviceType, item.count, item.factory, item.model, item.produceDate, item.insulation, item.ground, item.runStatus, item.desc, '', `图${item.routeNo}-3-JD${idx+1}`, item.suggest, ''
+            ]);
+            const electricalWs = XLSX.utils.aoa_to_sheet([electricalHeader, ...electricalData]);
+            XLSX.utils.book_append_sheet(wb, electricalWs, "13机械电气");
+
+            // 7. 安全评定Sheet
+            const safetyHeader = ["路线序号", "泵站名称", "报告表号", "序号", "工程类别", "分项工程名称", "评定条款或标准", "分项工程建议安全类别", "工程建议/安全类别", "安全评估/建议类别", "判定依据/主要问题", "备注"];
+            const safetyData = globalData.safety.map((item, idx) => [
+                item.routeNo, item.stationName, `表${item.routeNo}-4-1`, idx+1, item.projectType, item.subProject, item.standard, item.subLevel, item.projectLevel, item.suggestLevel, item.basis, ''
+            ]);
+            const safetyWs = XLSX.utils.aoa_to_sheet([safetyHeader, ...safetyData]);
+            XLSX.utils.book_append_sheet(wb, safetyWs, "14安全类别评定");
+
+            // 8. 问题台账Sheet
+            const problemHeader = ["问题编号", "路线序号", "泵站名称", "问题类别", "分项工程", "检测部位", "问题描述", "严重程度", "照片编号", "对应报告段落", "建议措施", "是否影响类别", "是否需复核", "责任/对接人", "状态", "备注"];
+            const problemData = globalData.problem.map((item, idx) => [
+                item.id, item.routeNo, item.stationName, item.type, item.subProject, item.part, item.desc, item.level, '', '', item.suggest, item.affect, item.recheck, item.principal, item.status, ''
+            ]);
+            const problemWs = XLSX.utils.aoa_to_sheet([problemHeader, ...problemData]);
+            XLSX.utils.book_append_sheet(wb, problemWs, "15问题台账");
+
+            // 9. 报告文本速填Sheet
+            const reportHeader = ["路线序号", "泵站名称", "工程概况句", "外观质量汇总句", "断面尺寸汇总句", "强度汇总句", "保护层汇总句", "金属结构句", "机械电气句", "结论句", "备注"];
+            const reportData = pumpStations.map(station => {
+                const appCount = globalData.appearance.filter(i => i.routeNo == station.routeNo).length;
+                const secCount = globalData.section.filter(i => i.routeNo == station.routeNo).length;
+                const rebCount = globalData.rebound.filter(i => i.routeNo == station.routeNo).length;
+                const proCount = globalData.protective.filter(i => i.routeNo == station.routeNo).length;
+                return [
+                    station.routeNo,
+                    station.name,
+                    `${station.name}设计流量为${station.designFlow}，建设性质为${station.buildType}，现场坐标为${station.gps}。`,
+                    `本次检测${station.name}外观质量共${appCount}个测点，检测结果详见外观检测成果表。`,
+                    `检测${station.name}主要构筑物断面尺寸${secCount}组，检测结果详见表${station.routeNo}-3-1-1。`,
+                    `回弹法检测${station.name}混凝土抗压强度及碳化深度，检测结果详见相应强度检测成果表。`,
+                    `检测${station.name}混凝土钢筋保护层厚度及钢筋间距，检测结果见相应保护层检测成果表。`,
+                    '',
+                    '',
+                    `依据《泵站安全鉴定规程》（SL316-2015）附录C，${station.name}综合安全评估类别建议为___类。`,
+                    ''
+                ];
+            });
+            const reportWs = XLSX.utils.aoa_to_sheet([reportHeader, ...reportData]);
+            XLSX.utils.book_append_sheet(wb, reportWs, "17报告文本速填");
+
+            // 10. 照片编号清单Sheet
+            const photoHeader = ["路线序号", "泵站名称", "照片编号", "报告图号", "拍摄对象", "远景/近景", "是否入报告", "照片说明/图名", "备注"];
+            const photoData = globalData.photos.map((item, idx) => [
+                item.routeNo, item.stationName, item.photoNo, item.figureNo, item.subject, item.viewType, item.inReport, item.desc, ''
+            ]);
+            const photoWs = XLSX.utils.aoa_to_sheet([photoHeader, ...photoData]);
+            XLSX.utils.book_append_sheet(wb, photoWs, "16照片编号清单");
+
+            // 11. 人员仪器Sheet
+            const personHeader = ["类别", "名称/姓名", "职务/型号", "联系电话/精度", "用途/备注"];
+            const personData = [
+                ["沈阳市", "赵正武", "农水处处长", "13478114527", "现场协调"],
+                ["沈阳市", "佟浩", "农水处工作人员", "18540045288", "现场协调"],
+                ["辽中区", "钟浩", "副局长", "13998346669", "现场协调"],
+                ["辽中区", "王卫", "科长", "13889238222", "现场协调"],
+                ["辽中区", "李彤", "设计人员", "15714102533", "现场协调"],
+                ["", "", "", "", ""],
+                ["仪器设备", "混凝土回弹仪", "ZC3-A或ZC3-T", "0.1MPa", "混凝土抗压强度"],
+                ["仪器设备", "数显碳化深度尺", "/", "0.01mm", "碳化深度"],
+                ["仪器设备", "冲击钻/手持钻", "/", "/", "碳化孔、现场辅助"],
+                ["仪器设备", "钢卷尺", "5m", "1mm", "局部尺寸"],
+                ["仪器设备", "米尺", "50m", "1mm", "断面尺寸"],
+                ["仪器设备", "钢筋扫描仪", "HC-GY61T或同等", "/", "保护层厚度及钢筋间距"],
+                ["仪器设备", "游标卡尺", "0-300mm", "0.02mm", "金属结构局部尺寸"],
+                ["仪器设备", "超声波测厚仪", "TT300或同等", "0.01mm", "钢管/闸门必要时测厚"],
+                ["仪器设备", "绝缘电阻表", "按现场电压等级", "/", "电机及电气回路绝缘"],
+                ["仪器设备", "接地电阻测试仪", "/", "/", "接地连续性及接地电阻"],
+                ["仪器设备", "照相设备/定位设备", "手机或相机/GPS", "/", "照片、定位、时间记录"],
+                ["仪器设备", "安全防护用品", "安全帽、救生衣、反光背心、绝缘手套", "/", "临水、电气及泵房安全"]
+            ];
+            const personWs = XLSX.utils.aoa_to_sheet([personHeader, ...personData]);
+            XLSX.utils.book_append_sheet(wb, personWs, "18人员仪器");
+
+            // 导出文件
+            XLSX.writeFile(wb, `排水站检测台账_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+        }
+
+        // 页面加载完成初始化
+        document.addEventListener("DOMContentLoaded", function() {
+            initData();
+            window.currentTabIndex = 0;
+            const tabItems = document.querySelectorAll(".tab-item");
+            const tabCount = tabItems.length;
+
+            // 泵站选择事件
+            document.getElementById("pumpStationSelect").addEventListener("change", function(e) {
+                const routeNo = e.target.value;
+                if (!routeNo) return;
+                const station = pumpStations.find(s => s.routeNo == routeNo);
+                if (station) {
+                    globalData.selectedStation = station;
+                    renderStationInfo(station);
+                    saveData();
+                }
+            });
+
+            // 标签页点击事件
+            tabItems.forEach(item => {
+                item.addEventListener("click", function() {
+                    switchTab(this.dataset.tab);
+                });
+            });
+
+            // 上下页按钮
+            document.getElementById("prevTabBtn").addEventListener("click", function() {
+                if (window.currentTabIndex > 0) {
+                    window.currentTabIndex--;
+                    switchTab(tabItems[window.currentTabIndex].dataset.tab);
+                }
+            });
+
+            document.getElementById("nextTabBtn").addEventListener("click", function() {
+                if (window.currentTabIndex < tabCount - 1) {
+                    window.currentTabIndex++;
+                    switchTab(tabItems[window.currentTabIndex].dataset.tab);
+                }
+            });
+
+            // 外观检测分项工程变化
+            document.getElementById("app_subProject").addEventListener("change", function() {
+                renderPartSelect("appearance", "app_subProject", "app_part");
+            });
+
+            // 断面尺寸分项工程变化
+            document.getElementById("sec_subProject").addEventListener("change", function() {
+                renderPartSelect("section", "sec_subProject", "sec_part");
+            });
+
+            // 回弹碳化分项工程变化
+            document.getElementById("reb_subProject").addEventListener("change", function() {
+                renderPartSelect("rebound", "reb_subProject", "reb_part");
+            });
+
+            // 保护层分项工程变化
+            document.getElementById("pro_subProject").addEventListener("change", function() {
+                renderPartSelect("protective", "pro_subProject", "pro_part");
+            });
+
+            // 安全评定工程类别变化
+            document.getElementById("saf_projectType").addEventListener("change", function() {
+                renderPartSelect("safety", "saf_projectType", "saf_subProject");
+            });
+
+            // 断面尺寸自动计算偏差
+            ["sec_testValue", "sec_designValue"].forEach(id => {
+                document.getElementById(id).addEventListener("input", function() {
+                    const test = parseFloat(document.getElementById("sec_testValue").value) || 0;
+                    const design = parseFloat(document.getElementById("sec_designValue").value) || 0;
+                    document.getElementById("sec_deviation").value = (test - design).toFixed(3);
+                });
+            });
+
+            // 外观拍照功能
+            document.getElementById("app_takePhoto").addEventListener("click", function() {
+                document.getElementById("app_camera").click();
+            });
+
+            document.getElementById("app_camera").addEventListener("change", function(e) {
+                const file = e.target.files[0];
+                if (!file || !globalData.selectedStation) return;
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const photoNo = `PHOTO_${globalData.selectedStation.routeNo}_${Date.now().toString().slice(-6)}`;
+                    const figureNo = `图${globalData.selectedStation.routeNo}-3-${globalData.appearance.length + 1}`;
+                    
+                    // 保存照片
+                    globalData.photos.push({
+                        routeNo: globalData.selectedStation.routeNo,
+                        stationName: globalData.selectedStation.name,
+                        photoNo: photoNo,
+                        figureNo: figureNo,
+                        subject: `${document.getElementById("app_subProject").value}-${document.getElementById("app_part").value}`,
+                        viewType: "近景",
+                        inReport: "是",
+                        desc: `${document.getElementById("app_part")}现场检测照片`,
+                        base64: event.target.result
+                    });
+
+                    // 预览
+                    document.getElementById("app_photoNo").textContent = photoNo;
+                    document.getElementById("app_photoImg").src = event.target.result;
+                    document.getElementById("app_photoPreview").classList.remove("hidden");
+                    window.currentPhotoNo = photoNo;
+
+                    saveData();
+                };
+                reader.readAsDataURL(file);
+            });
+
+            // 清除照片
+            document.getElementById("app_clearPhoto").addEventListener("click", function() {
+                document.getElementById("app_camera").value = '';
+                document.getElementById("app_photoPreview").classList.add("hidden");
+                window.currentPhotoNo = null;
+            });
+
+            // 表单提交事件
+            // 外观表单
+            document.getElementById("appearanceForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    subProject: document.getElementById("app_subProject").value,
+                    part: document.getElementById("app_part").value,
+                    material: document.getElementById("app_material").value,
+                    result: document.getElementById("app_result").value,
+                    photoNo: window.currentPhotoNo || '',
+                    remark: document.getElementById("app_remark").value
+                };
+
+                globalData.appearance.push(data);
+                saveData();
+                this.reset();
+                document.getElementById("app_photoPreview").classList.add("hidden");
+                window.currentPhotoNo = null;
+                renderStationInfo(globalData.selectedStation);
+                alert("保存成功！");
+            });
+
+            // 断面尺寸表单
+            document.getElementById("sectionForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    subProject: document.getElementById("sec_subProject").value,
+                    part: document.getElementById("sec_part").value,
+                    param: document.getElementById("sec_param").value,
+                    unit: document.getElementById("sec_unit").value,
+                    testValue: document.getElementById("sec_testValue").value,
+                    designValue: document.getElementById("sec_designValue").value,
+                    deviation: document.getElementById("sec_deviation").value,
+                    remark: document.getElementById("sec_remark").value
+                };
+
+                globalData.section.push(data);
+                saveData();
+                this.reset();
+                renderStationInfo(globalData.selectedStation);
+                alert("保存成功！");
+            });
+
+            // 回弹碳化表单
+            document.getElementById("reboundForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    subProject: document.getElementById("reb_subProject").value,
+                    part: document.getElementById("reb_part").value,
+                    carbonDepth: document.getElementById("reb_carbonDepth").value,
+                    minStrength: document.getElementById("reb_minStrength").value,
+                    avgStrength: document.getElementById("reb_avgStrength").value,
+                    stdDev: document.getElementById("reb_stdDev").value,
+                    predictStrength: document.getElementById("reb_predictStrength").value,
+                    resultDesc: document.getElementById("reb_resultDesc").value
+                };
+
+                globalData.rebound.push(data);
+                saveData();
+                this.reset();
+                renderStationInfo(globalData.selectedStation);
+                alert("保存成功！");
+            });
+
+            // 保护层表单
+            document.getElementById("protectiveForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    subProject: document.getElementById("pro_subProject").value,
+                    part: document.getElementById("pro_part").value,
+                    proMax: document.getElementById("pro_proMax").value,
+                    proMin: document.getElementById("pro_proMin").value,
+                    spaceMax: document.getElementById("pro_spaceMax").value,
+                    spaceMin: document.getElementById("pro_spaceMin").value,
+                    resultDesc: document.getElementById("pro_resultDesc").value
+                };
+
+                globalData.protective.push(data);
+                saveData();
+                this.reset();
+                renderStationInfo(globalData.selectedStation);
+                alert("保存成功！");
+            });
+
+            // 金属结构表单
+            document.getElementById("metalForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    deviceType: document.getElementById("met_deviceType").value,
+                    count: document.getElementById("met_count").value,
+                    spec: document.getElementById("met_spec").value,
+                    factory: document.getElementById("met_factory").value,
+                    model: document.getElementById("met_model").value,
+                    produceDate: document.getElementById("met_produceDate").value,
+                    desc: document.getElementById("met_desc").value,
+                    suggest: document.getElementById("met_suggest").value
+                };
+
+                globalData.metal.push(data);
+                saveData();
+                this.reset();
+                renderStationInfo(globalData.selectedStation);
+                alert("保存成功！");
+            });
+
+            // 机械电气表单
+            document.getElementById("electricalForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    deviceType: document.getElementById("ele_deviceType").value,
+                    count: document.getElementById("ele_count").value,
+                    factory: document.getElementById("ele_factory").value,
+                    model: document.getElementById("ele_model").value,
+                    produceDate: document.getElementById("ele_produceDate").value,
+                    insulation: document.getElementById("ele_insulation").value,
+                    ground: document.getElementById("ele_ground").value,
+                    runStatus: document.getElementById("ele_runStatus").value,
+                    desc: document.getElementById("ele_desc").value,
+                    suggest: document.getElementById("ele_suggest").value
+                };
+
+                globalData.electrical.push(data);
+                saveData();
+                this.reset();
+                renderStationInfo(globalData.selectedStation);
+                alert("保存成功！");
+            });
+
+            // 安全评定表单
+            document.getElementById("safetyForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    projectType: document.getElementById("saf_projectType").value,
+                    subProject: document.getElementById("saf_subProject").value,
+                    standard: document.getElementById("saf_standard").value,
+                    subLevel: document.getElementById("saf_subLevel").value,
+                    projectLevel: document.getElementById("saf_projectLevel").value,
+                    suggestLevel: document.getElementById("saf_suggestLevel").value,
+                    basis: document.getElementById("saf_basis").value
+                };
+
+                globalData.safety.push(data);
+                saveData();
+                this.reset();
+                renderStationInfo(globalData.selectedStation);
+                alert("保存成功！");
+            });
+
+            // 问题台账表单
+            document.getElementById("problemForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    id: globalData.problem.length + 1,
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    type: document.getElementById("prob_type").value,
+                    level: document.getElementById("prob_level").value,
+                    subProject: document.getElementById("prob_subProject").value,
+                    part: document.getElementById("prob_part").value,
+                    desc: document.getElementById("prob_desc").value,
+                    suggest: document.getElementById("prob_suggest").value,
+                    affect: document.getElementById("prob_affect").value,
+                    recheck: document.getElementById("prob_recheck").value,
+                    principal: document.getElementById("prob_principal").value,
+                    status: document.getElementById("prob_status").value
+                };
+
+                globalData.problem.push(data);
+                saveData();
+                this.reset();
+                renderStationInfo(globalData.selectedStation);
+                alert("保存成功！");
+            });
+
+            // 重置按钮事件
+            document.getElementById("app_reset").addEventListener("click", function() {
+                document.getElementById("appearanceForm").reset();
+                document.getElementById("app_photoPreview").classList.add("hidden");
+                window.currentPhotoNo = null;
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("sec_reset").addEventListener("click", function() {
+                document.getElementById("sectionForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("reb_reset").addEventListener("click", function() {
+                document.getElementById("reboundForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("pro_reset").addEventListener("click", function() {
+                document.getElementById("protectiveForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("met_reset").addEventListener("click", function() {
+                document.getElementById("metalForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("ele_reset").addEventListener("click", function() {
+                document.getElementById("electricalForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("saf_reset").addEventListener("click", function() {
+                document.getElementById("safetyForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("prob_reset").addEventListener("click", function() {
+                document.getElementById("problemForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            // 删除按钮事件
+            document.addEventListener("click", function(e) {
+                if (e.target.classList.contains("deleteBtn")) {
+                    const type = e.target.dataset.type;
+                    const index = e.target.dataset.index;
+                    if (confirm("确定要删除这条记录吗？")) {
+                        globalData[type].splice(index, 1);
+                        saveData();
+                    }
+                }
+            });
+
+            // 导出Excel按钮
+            document.getElementById("exportExcelBtn").addEventListener("click", function() {
+                if (confirm("确定要导出Excel台账吗？")) {
+                    generateExcel();
+                }
+            });
+
+            // 导出照片压缩包
+            document.getElementById("exportPhotoBtn").addEventListener("click", async function() {
+                if (globalData.photos.length === 0) {
+                    alert("暂无照片可导出！");
+                    return;
+                }
+
+                if (confirm("确定要导出照片压缩包吗？")) {
+                    const zip = new JSZip();
+                    globalData.photos.forEach(photo => {
+                        const base64 = photo.base64.split(',')[1];
+                        zip.file(`${photo.stationName}/${photo.photoNo}.jpg`, base64, { base64: true });
+                    });
+
+                    const zipBlob = await zip.generateAsync({ type: "blob" });
+                    saveAs(zipBlob, `排水站检测照片_${new Date().toLocaleDateString().replace(/\//g, '-')}.zip`);
+                }
+            });
+
+            // 清空所有数据
+            document.getElementById("clearAllDataBtn").addEventListener("click", function() {
+                if (confirm("⚠️ 警告：此操作将清空所有本地检测数据，且不可恢复！确定要继续吗？")) {
+                    localStorage.removeItem(STORAGE_KEY);
+                    globalData = {
+                        selectedStation: null,
+                        appearance: [],
+                        section: [],
+                        rebound: [],
+                        protective: [],
+                        metal: [],
+                        electrical: [],
+                        safety: [],
+                        problem: [],
+                        photos: []
+                    };
+                    initData();
+                    alert("所有数据已清空！");
+                }
+            });
+        });
+    </script>
+</body>
+</html>
