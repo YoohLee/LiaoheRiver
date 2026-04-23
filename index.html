@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>排水站安全检测记录系统</title>
-    <!-- 引入CDN依赖（兼容Safari） -->
+    <!-- 引入CDN依赖 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.2/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <!-- Tailwind配置 -->
@@ -341,6 +341,14 @@
                             </select>
                         </div>
                     </div>
+                    <div class="form-item">
+                        <label class="form-label">回弹角度</label>
+                        <select class="input-base" id="reb_angle">
+                            <option value="水平" selected>水平</option>
+                            <option value="向上">向上</option>
+                            <option value="向下">向下</option>
+                        </select>
+                    </div>
                     <div class="grid grid-cols-2 gap-3 mb-4">
                         <div class="form-item mb-0">
                             <label class="form-label">碳化深度(mm)</label>
@@ -353,17 +361,23 @@
                     </div>
                     <div class="grid grid-cols-2 gap-3 mb-4">
                         <div class="form-item mb-0">
+                            <label class="form-label">最大强度(MPa)</label>
+                            <input type="number" step="0.01" class="input-base" id="reb_maxStrength">
+                        </div>
+                        <div class="form-item mb-0">
                             <label class="form-label">平均强度(MPa)</label>
                             <input type="number" step="0.01" class="input-base" id="reb_avgStrength">
                         </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
                         <div class="form-item mb-0">
                             <label class="form-label">标准差(MPa)</label>
                             <input type="number" step="0.01" class="input-base" id="reb_stdDev">
                         </div>
-                    </div>
-                    <div class="form-item">
-                        <label class="form-label">推定强度(MPa)</label>
-                        <input type="number" step="0.01" class="input-base" id="reb_predictStrength">
+                        <div class="form-item mb-0">
+                            <label class="form-label">推定强度(MPa)</label>
+                            <input type="number" step="0.01" class="input-base" id="reb_predictStrength">
+                        </div>
                     </div>
                     <div class="form-item">
                         <label class="form-label">结果描述</label>
@@ -384,6 +398,8 @@
                             <tr>
                                 <th class="p-2 rounded-l-lg">泵站</th>
                                 <th class="p-2">部位</th>
+                                <th class="p-2">角度</th>
+                                <th class="p-2">最大强度</th>
                                 <th class="p-2">平均强度</th>
                                 <th class="p-2 rounded-r-lg">操作</th>
                             </tr>
@@ -945,7 +961,7 @@
     </footer>
 
     <script>
-        // ==================== 数据与配置 ====================
+        // 预设泵站基础数据
         const pumpStations = [
             { routeNo: 1, name: "下万排水站", designFlow: "7.5m³/s", buildType: "维修改造", gps: "41.505968，122.640043" },
             { routeNo: 2, name: "瓜茄排水站", designFlow: "1.8m³/s", buildType: "维修改造", gps: "41.511976，122.601002" },
@@ -969,6 +985,7 @@
             { routeNo: 20, name: "十间房排水站", designFlow: "1.2m³/s", buildType: "维修改造", gps: "41.531488，122.608248" }
         ];
 
+        // 检测部位映射
         const partMap = {
             appearance: {
                 "排水闸": ["工作桥桥面", "启闭机操作平台", "排架柱", "闸墩/边墙", "胸墙/挡墙", "出口护坡/底板"],
@@ -1001,203 +1018,124 @@
             }
         };
 
+        // 本地存储key
         const STORAGE_KEY = "pumpStationDetectionData";
         let globalData = {
             selectedStation: null,
-            appearance: [], section: [], rebound: [], protective: [],
-            metal: [], electrical: [], safety: [], problem: [], photos: []
+            appearance: [],
+            section: [],
+            rebound: [],
+            protective: [],
+            metal: [],
+            electrical: [],
+            safety: [],
+            problem: [],
+            photos: []
         };
-        let currentTabIndex = 0;
-        const tabOrder = ["base", "appearance", "section", "rebound", "protective", "metal", "electrical", "safety", "problem", "export"];
-        let currentPhotoNo = null;
+        window.currentPhotoNo = null;
+        window.storageWarned = false;
 
-        // ==================== 初始化 ====================
-        document.addEventListener("DOMContentLoaded", function() {
-            initData();
-            initEventListeners();
-        });
+        function currentRouteNo() {
+            return globalData.selectedStation ? globalData.selectedStation.routeNo : null;
+        }
 
+        function isCurrentStation(item) {
+            return !currentRouteNo() || item.routeNo === currentRouteNo();
+        }
+
+        function recordsWithIndex(type) {
+            return globalData[type]
+                .map((item, index) => ({ item, index }))
+                .filter(({ item }) => isCurrentStation(item));
+        }
+
+        function setValue(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.value = value || "";
+        }
+
+        function getValue(id) {
+            const el = document.getElementById(id);
+            return el ? el.value : "";
+        }
+
+        function sameRecordByKeys(item, data, keys) {
+            return keys.every(key => (item[key] || "") === (data[key] || ""));
+        }
+
+        function upsertRecord(type, data, keys) {
+            const index = globalData[type].findIndex(item => sameRecordByKeys(item, data, keys));
+            if (index >= 0) {
+                globalData[type][index] = { ...globalData[type][index], ...data };
+            } else {
+                globalData[type].push(data);
+            }
+        }
+
+        function findRecord(type, matcher) {
+            return globalData[type].find(item => item.routeNo === currentRouteNo() && matcher(item));
+        }
+
+        // 初始化加载数据
         function initData() {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) {
-                try { globalData = JSON.parse(saved); } catch (e) { globalData = getEmptyData(); }
+                globalData = JSON.parse(saved);
             }
             renderStationList();
             renderAllTables();
             updateCount();
         }
 
-        function getEmptyData() {
-            return {
-                selectedStation: null, appearance: [], section: [], rebound: [], protective: [],
-                metal: [], electrical: [], safety: [], problem: [], photos: []
-            };
-        }
-
+        // 保存数据到本地
         function saveData() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(globalData));
-            setTimeout(() => {
-                renderAllTables();
-                updateCount();
-            }, 10);
-        }
-
-        // ==================== 事件监听 ====================
-        function initEventListeners() {
-            // 标签页切换
-            document.querySelectorAll(".tab-item").forEach(item => {
-                item.addEventListener("click", () => switchToTab(item.dataset.tab));
-            });
-            document.getElementById("prevTabBtn").addEventListener("click", () => {
-                if (currentTabIndex > 0) switchToTab(tabOrder[--currentTabIndex]);
-            });
-            document.getElementById("nextTabBtn").addEventListener("click", () => {
-                if (currentTabIndex < tabOrder.length - 1) switchToTab(tabOrder[++currentTabIndex]);
-            });
-
-            // 泵站选择
-            document.getElementById("pumpStationSelect").addEventListener("change", function() {
-                const station = pumpStations.find(s => s.routeNo == this.value);
-                if (station) {
-                    globalData.selectedStation = station;
-                    renderStationInfo(station);
-                    saveData();
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(globalData));
+            } catch (err) {
+                console.warn("localStorage保存失败，通常是Safari照片数据过大导致：", err);
+                if (!window.storageWarned) {
+                    window.storageWarned = true;
+                    alert("记录已在当前页面中更新，但浏览器本地存储可能已满。建议先导出Excel/照片，或减少照片数量后继续。");
                 }
-            });
-
-            // 外观检测
-            document.getElementById("app_subProject").addEventListener("change", function() {
-                renderPartSelect("appearance", "app_subProject", "app_part");
-            });
-            document.getElementById("app_part").addEventListener("change", function() {
-                if (!globalData.selectedStation) return;
-                clearSingleForm("appearanceForm");
-                fillFormData("appearance", globalData.selectedStation.routeNo, 
-                    document.getElementById("app_subProject").value, this.value);
-            });
-            document.getElementById("app_takePhoto").addEventListener("click", () => document.getElementById("app_camera").click());
-            document.getElementById("app_camera").addEventListener("change", handlePhotoCapture);
-            document.getElementById("app_clearPhoto").addEventListener("click", clearPhoto);
-            document.getElementById("app_reset").addEventListener("click", () => clearSingleForm("appearanceForm"));
-            document.getElementById("appearanceForm").addEventListener("submit", handleAppearanceSubmit);
-
-            // 断面尺寸
-            document.getElementById("sec_subProject").addEventListener("change", function() {
-                renderPartSelect("section", "sec_subProject", "sec_part");
-            });
-            document.getElementById("sec_part").addEventListener("change", function() {
-                if (!globalData.selectedStation) return;
-                clearSingleForm("sectionForm");
-                fillFormData("section", globalData.selectedStation.routeNo,
-                    document.getElementById("sec_subProject").value, this.value);
-            });
-            ["sec_testValue", "sec_designValue"].forEach(id => {
-                document.getElementById(id).addEventListener("input", calculateDeviation);
-            });
-            document.getElementById("sec_reset").addEventListener("click", () => clearSingleForm("sectionForm"));
-            document.getElementById("sectionForm").addEventListener("submit", handleSectionSubmit);
-
-            // 回弹碳化
-            document.getElementById("reb_subProject").addEventListener("change", function() {
-                renderPartSelect("rebound", "reb_subProject", "reb_part");
-            });
-            document.getElementById("reb_part").addEventListener("change", function() {
-                if (!globalData.selectedStation) return;
-                clearSingleForm("reboundForm");
-                fillFormData("rebound", globalData.selectedStation.routeNo,
-                    document.getElementById("reb_subProject").value, this.value);
-            });
-            document.getElementById("reb_reset").addEventListener("click", () => clearSingleForm("reboundForm"));
-            document.getElementById("reboundForm").addEventListener("submit", handleReboundSubmit);
-
-            // 保护层
-            document.getElementById("pro_subProject").addEventListener("change", function() {
-                renderPartSelect("protective", "pro_subProject", "pro_part");
-            });
-            document.getElementById("pro_part").addEventListener("change", function() {
-                if (!globalData.selectedStation) return;
-                clearSingleForm("protectiveForm");
-                fillFormData("protective", globalData.selectedStation.routeNo,
-                    document.getElementById("pro_subProject").value, this.value);
-            });
-            document.getElementById("pro_reset").addEventListener("click", () => clearSingleForm("protectiveForm"));
-            document.getElementById("protectiveForm").addEventListener("submit", handleProtectiveSubmit);
-
-            // 金属结构
-            document.getElementById("met_reset").addEventListener("click", () => clearSingleForm("metalForm"));
-            document.getElementById("metalForm").addEventListener("submit", handleMetalSubmit);
-
-            // 机械电气
-            document.getElementById("ele_reset").addEventListener("click", () => clearSingleForm("electricalForm"));
-            document.getElementById("electricalForm").addEventListener("submit", handleElectricalSubmit);
-
-            // 安全评定
-            document.getElementById("saf_projectType").addEventListener("change", function() {
-                renderPartSelect("safety", "saf_projectType", "saf_subProject");
-            });
-            document.getElementById("saf_reset").addEventListener("click", () => clearSingleForm("safetyForm"));
-            document.getElementById("safetyForm").addEventListener("submit", handleSafetySubmit);
-
-            // 问题台账
-            document.getElementById("prob_reset").addEventListener("click", () => clearSingleForm("problemForm"));
-            document.getElementById("problemForm").addEventListener("submit", handleProblemSubmit);
-
-            // 导出
-            document.getElementById("exportExcelBtn").addEventListener("click", exportExcel);
-            document.getElementById("exportPhotoBtn").addEventListener("click", exportPhotos);
-            document.getElementById("clearAllDataBtn").addEventListener("click", clearAllData);
-
-            // 全局删除按钮委托
-            document.body.addEventListener("click", function(e) {
-                if (e.target.classList.contains("deleteBtn")) {
-                    const type = e.target.dataset.type;
-                    const index = parseInt(e.target.dataset.index);
-                    if (confirm("确定要删除这条记录吗？")) {
-                        globalData[type].splice(index, 1);
-                        saveData();
-                    }
-                }
-            });
+            }
+            renderAllTables();
+            updateCount();
         }
 
-        // ==================== 标签页逻辑 ====================
-        function switchToTab(tabId) {
-            document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
-            document.querySelectorAll(".tab-item").forEach(el => {
-                el.classList.remove("tab-active");
-                el.classList.add("tab-inactive");
-            });
-            document.getElementById(`tab-${tabId}`).classList.remove("hidden");
-            const activeTab = document.querySelector(`.tab-item[data-tab="${tabId}"]`);
-            activeTab.classList.add("tab-active");
-            activeTab.classList.remove("tab-inactive");
-            currentTabIndex = tabOrder.indexOf(tabId);
-        }
-
-        // ==================== 渲染逻辑 ====================
+        // 渲染泵站列表
         function renderStationList() {
             const select = document.getElementById("pumpStationSelect");
             const tbody = document.getElementById("stationTableBody");
+            
+            // 清空
             select.innerHTML = '<option value="">请选择检测泵站</option>';
             tbody.innerHTML = '';
 
             pumpStations.forEach(station => {
+                // 下拉框
                 const option = document.createElement("option");
                 option.value = station.routeNo;
                 option.textContent = station.name;
                 select.appendChild(option);
 
+                // 表格
                 const tr = document.createElement("tr");
-                tr.innerHTML = `<td class="p-2">${station.routeNo}</td><td class="p-2">${station.name}</td><td class="p-2">${station.designFlow}</td>`;
+                tr.innerHTML = `
+                    <td class="p-2">${station.routeNo}</td>
+                    <td class="p-2">${station.name}</td>
+                    <td class="p-2">${station.designFlow}</td>
+                `;
                 tbody.appendChild(tr);
             });
 
+            // 选中已选泵站
             if (globalData.selectedStation) {
                 select.value = globalData.selectedStation.routeNo;
                 renderStationInfo(globalData.selectedStation);
             }
         }
 
+        // 渲染泵站基础信息
         function renderStationInfo(station) {
             document.getElementById("routeNo").textContent = station.routeNo;
             document.getElementById("designFlow").textContent = station.designFlow;
@@ -1205,158 +1143,486 @@
             document.getElementById("gps").textContent = station.gps;
             document.getElementById("stationBaseInfo").classList.remove("hidden");
 
-            const formFields = [
-                { r: "app_routeNo", n: "app_stationName" }, { r: "sec_routeNo", n: "sec_stationName" },
-                { r: "reb_routeNo", n: "reb_stationName" }, { r: "pro_routeNo", n: "pro_stationName" },
-                { r: "met_routeNo", n: "met_stationName" }, { r: "ele_routeNo", n: "ele_stationName" },
-                { r: "saf_routeNo", n: "saf_stationName" }, { r: "prob_routeNo", n: "prob_stationName" }
+            // 填充所有表单的泵站信息
+            const fields = [
+                { route: "app_routeNo", name: "app_stationName" },
+                { route: "sec_routeNo", name: "sec_stationName" },
+                { route: "reb_routeNo", name: "reb_stationName" },
+                { route: "pro_routeNo", name: "pro_stationName" },
+                { route: "met_routeNo", name: "met_stationName" },
+                { route: "ele_routeNo", name: "ele_stationName" },
+                { route: "saf_routeNo", name: "saf_stationName" },
+                { route: "prob_routeNo", name: "prob_stationName" }
             ];
-            formFields.forEach(f => {
-                document.getElementById(f.r).value = station.routeNo;
-                document.getElementById(f.n).value = station.name;
+
+            fields.forEach(field => {
+                document.getElementById(field.route).value = station.routeNo;
+                document.getElementById(field.name).value = station.name;
             });
 
+            // 问题编号
             document.getElementById("prob_id").value = globalData.problem.length + 1;
-            clearAllForms();
+
+            ["appearance", "section", "rebound", "protective", "safety"].forEach(loadRecordForCurrentPart);
         }
 
-        function renderPartSelect(type, subKey, partKey) {
-            const subVal = document.getElementById(subKey).value;
-            const partSel = document.getElementById(partKey);
-            partSel.innerHTML = '<option value="">请先选分项工程</option>';
-            if (!subVal || !partMap[type][subVal]) return;
-
-            partMap[type][subVal].forEach(p => {
-                const opt = document.createElement("option");
-                opt.value = p;
-                opt.textContent = p;
-                partSel.appendChild(opt);
-            });
-        }
-
-        function fillFormData(type, routeNo, subProject, part) {
-            const dataList = globalData[type];
-            const target = dataList.find(item => 
-                item.routeNo == routeNo && item.subProject == subProject && item.part == part
-            );
-            if (!target) return;
-
-            if (type === "appearance") {
-                document.getElementById("app_material").value = target.material || "钢筋混凝土";
-                document.getElementById("app_result").value = target.result || "未见明显缺陷";
-                document.getElementById("app_remark").value = target.remark || "";
-                const photo = globalData.photos.find(p => p.photoNo === target.photoNo);
-                if (photo) {
-                    currentPhotoNo = photo.photoNo;
-                    document.getElementById("app_photoNo").textContent = photo.photoNo;
-                    document.getElementById("app_photoImg").src = photo.base64;
-                    document.getElementById("app_photoPreview").classList.remove("hidden");
-                }
-            }
-            if (type === "section") {
-                document.getElementById("sec_param").value = target.param || "宽度";
-                document.getElementById("sec_unit").value = target.unit || "m";
-                document.getElementById("sec_testValue").value = target.testValue || "";
-                document.getElementById("sec_designValue").value = target.designValue || "";
-                document.getElementById("sec_deviation").value = target.deviation || "";
-                document.getElementById("sec_remark").value = target.remark || "";
-            }
-            if (type === "rebound") {
-                document.getElementById("reb_carbonDepth").value = target.carbonDepth || "";
-                document.getElementById("reb_minStrength").value = target.minStrength || "";
-                document.getElementById("reb_avgStrength").value = target.avgStrength || "";
-                document.getElementById("reb_stdDev").value = target.stdDev || "";
-                document.getElementById("reb_predictStrength").value = target.predictStrength || "";
-                document.getElementById("reb_resultDesc").value = target.resultDesc || "";
-            }
-            if (type === "protective") {
-                document.getElementById("pro_proMax").value = target.proMax || "";
-                document.getElementById("pro_proMin").value = target.proMin || "";
-                document.getElementById("pro_spaceMax").value = target.spaceMax || "";
-                document.getElementById("pro_spaceMin").value = target.spaceMin || "";
-                document.getElementById("pro_resultDesc").value = target.resultDesc || "";
-            }
-        }
-
-        function clearSingleForm(formId) {
-            const form = document.getElementById(formId);
-            if (!form) return;
-            form.reset();
+        // 渲染部位下拉框
+        function renderPartSelect(type, subProjectKey, partKey) {
+            const subProject = document.getElementById(subProjectKey).value;
+            const partSelect = document.getElementById(partKey);
             
-            if (formId === "appearanceForm") {
-                document.getElementById("app_photoPreview").classList.add("hidden");
-                currentPhotoNo = null;
-                document.getElementById("app_camera").value = "";
-            }
-        }
-
-        function clearAllForms() {
-            ["appearanceForm", "sectionForm", "reboundForm", "protectiveForm", 
-             "metalForm", "electricalForm", "safetyForm", "problemForm"].forEach(clearSingleForm);
-        }
-
-        function renderAllTables() {
-            renderAppearanceTable(); renderSectionTable(); renderReboundTable(); 
-            renderProtectiveTable(); renderMetalTable(); renderElectricalTable();
-            renderSafetyTable(); renderProblemTable();
-        }
-
-        function renderTable(bodyId, dataKey, columns) {
-            const tbody = document.getElementById(bodyId);
-            tbody.innerHTML = "";
-            if (!globalData[dataKey] || globalData[dataKey].length === 0) {
-                tbody.innerHTML = `<tr><td colspan="${columns.length + 1}" class="p-2 text-center text-gray-500">暂无记录</td></tr>`;
+            if (!subProject || !partMap[type][subProject]) {
+                partSelect.innerHTML = '<option value="">请先选分项工程</option>';
+                loadRecordForCurrentPart(type);
                 return;
             }
-            globalData[dataKey].forEach((item, idx) => {
+
+            partSelect.innerHTML = '';
+            partMap[type][subProject].forEach(part => {
+                const option = document.createElement("option");
+                option.value = part;
+                option.textContent = part;
+                partSelect.appendChild(option);
+            });
+            loadRecordForCurrentPart(type);
+        }
+
+        function clearAppearanceFormFields() {
+            setValue("app_material", "钢筋混凝土");
+            setValue("app_result", "未见明显缺陷");
+            setValue("app_remark", "");
+            hideAppearancePhoto();
+        }
+
+        function hideAppearancePhoto() {
+            document.getElementById("app_camera").value = "";
+            document.getElementById("app_photoNo").textContent = "";
+            document.getElementById("app_photoImg").src = "";
+            document.getElementById("app_photoPreview").classList.add("hidden");
+            window.currentPhotoNo = null;
+        }
+
+        function showAppearancePhoto(photoNo) {
+            const photo = globalData.photos.find(item => item.photoNo === photoNo);
+            if (!photo || !photo.base64) {
+                hideAppearancePhoto();
+                return;
+            }
+            document.getElementById("app_photoNo").textContent = photo.photoNo;
+            document.getElementById("app_photoImg").src = photo.base64;
+            document.getElementById("app_photoPreview").classList.remove("hidden");
+            window.currentPhotoNo = photo.photoNo;
+        }
+
+        function clearSectionFormFields() {
+            setValue("sec_param", "宽度");
+            setValue("sec_unit", "m");
+            setValue("sec_testValue", "");
+            setValue("sec_designValue", "");
+            setValue("sec_deviation", "");
+            setValue("sec_remark", "");
+        }
+
+        function clearReboundFormFields() {
+            setValue("reb_angle", "水平");
+            ["reb_carbonDepth", "reb_minStrength", "reb_maxStrength", "reb_avgStrength", "reb_stdDev", "reb_predictStrength", "reb_resultDesc"].forEach(id => setValue(id, ""));
+        }
+
+        function clearProtectiveFormFields() {
+            ["pro_proMax", "pro_proMin", "pro_spaceMax", "pro_spaceMin", "pro_resultDesc"].forEach(id => setValue(id, ""));
+        }
+
+        function clearSafetyFormFields() {
+            setValue("saf_standard", "");
+            setValue("saf_subLevel", "");
+            setValue("saf_projectLevel", "");
+            setValue("saf_suggestLevel", "");
+            setValue("saf_basis", "");
+        }
+
+        function loadRecordForCurrentPart(type) {
+            if (!globalData.selectedStation) return;
+
+            if (type === "appearance") {
+                const subProject = getValue("app_subProject");
+                const part = getValue("app_part");
+                const record = findRecord("appearance", item => item.subProject === subProject && item.part === part);
+                if (!record) {
+                    clearAppearanceFormFields();
+                    return;
+                }
+                setValue("app_material", record.material);
+                setValue("app_result", record.result);
+                setValue("app_remark", record.remark);
+                record.photoNo ? showAppearancePhoto(record.photoNo) : hideAppearancePhoto();
+            }
+
+            if (type === "section") {
+                const subProject = getValue("sec_subProject");
+                const part = getValue("sec_part");
+                const param = getValue("sec_param");
+                const record = findRecord("section", item => item.subProject === subProject && item.part === part && (!param || item.param === param));
+                if (!record) {
+                    clearSectionFormFields();
+                    setValue("sec_param", param || "宽度");
+                    return;
+                }
+                setValue("sec_param", record.param);
+                setValue("sec_unit", record.unit);
+                setValue("sec_testValue", record.testValue);
+                setValue("sec_designValue", record.designValue);
+                setValue("sec_deviation", record.deviation);
+                setValue("sec_remark", record.remark);
+            }
+
+            if (type === "rebound") {
+                const subProject = getValue("reb_subProject");
+                const part = getValue("reb_part");
+                const record = findRecord("rebound", item => item.subProject === subProject && item.part === part);
+                if (!record) {
+                    clearReboundFormFields();
+                    return;
+                }
+                setValue("reb_carbonDepth", record.carbonDepth);
+                setValue("reb_angle", record.angle || "水平");
+                setValue("reb_minStrength", record.minStrength);
+                setValue("reb_maxStrength", record.maxStrength);
+                setValue("reb_avgStrength", record.avgStrength);
+                setValue("reb_stdDev", record.stdDev);
+                setValue("reb_predictStrength", record.predictStrength);
+                setValue("reb_resultDesc", record.resultDesc);
+            }
+
+            if (type === "protective") {
+                const subProject = getValue("pro_subProject");
+                const part = getValue("pro_part");
+                const record = findRecord("protective", item => item.subProject === subProject && item.part === part);
+                if (!record) {
+                    clearProtectiveFormFields();
+                    return;
+                }
+                setValue("pro_proMax", record.proMax);
+                setValue("pro_proMin", record.proMin);
+                setValue("pro_spaceMax", record.spaceMax);
+                setValue("pro_spaceMin", record.spaceMin);
+                setValue("pro_resultDesc", record.resultDesc);
+            }
+
+            if (type === "safety") {
+                const projectType = getValue("saf_projectType");
+                const subProject = getValue("saf_subProject");
+                const record = findRecord("safety", item => item.projectType === projectType && item.subProject === subProject);
+                if (!record) {
+                    clearSafetyFormFields();
+                    return;
+                }
+                setValue("saf_standard", record.standard);
+                setValue("saf_subLevel", record.subLevel);
+                setValue("saf_projectLevel", record.projectLevel);
+                setValue("saf_suggestLevel", record.suggestLevel);
+                setValue("saf_basis", record.basis);
+            }
+        }
+
+        function loadRecordByIndex(type, index) {
+            const record = globalData[type][index];
+            if (!record) return;
+            const tabMap = {
+                appearance: "appearance",
+                section: "section",
+                rebound: "rebound",
+                protective: "protective",
+                metal: "metal",
+                electrical: "electrical",
+                safety: "safety",
+                problem: "problem"
+            };
+            switchTab(tabMap[type]);
+
+            if (type === "appearance") {
+                setValue("app_subProject", record.subProject);
+                renderPartSelect("appearance", "app_subProject", "app_part");
+                setValue("app_part", record.part);
+                setValue("app_material", record.material);
+                setValue("app_result", record.result);
+                setValue("app_remark", record.remark);
+                record.photoNo ? showAppearancePhoto(record.photoNo) : hideAppearancePhoto();
+            }
+            if (type === "section") {
+                setValue("sec_subProject", record.subProject);
+                renderPartSelect("section", "sec_subProject", "sec_part");
+                setValue("sec_part", record.part);
+                setValue("sec_param", record.param);
+                setValue("sec_unit", record.unit);
+                setValue("sec_testValue", record.testValue);
+                setValue("sec_designValue", record.designValue);
+                setValue("sec_deviation", record.deviation);
+                setValue("sec_remark", record.remark);
+            }
+            if (type === "rebound") {
+                setValue("reb_subProject", record.subProject);
+                renderPartSelect("rebound", "reb_subProject", "reb_part");
+                setValue("reb_part", record.part);
+                setValue("reb_carbonDepth", record.carbonDepth);
+                setValue("reb_angle", record.angle || "水平");
+                setValue("reb_minStrength", record.minStrength);
+                setValue("reb_maxStrength", record.maxStrength);
+                setValue("reb_avgStrength", record.avgStrength);
+                setValue("reb_stdDev", record.stdDev);
+                setValue("reb_predictStrength", record.predictStrength);
+                setValue("reb_resultDesc", record.resultDesc);
+            }
+            if (type === "protective") {
+                setValue("pro_subProject", record.subProject);
+                renderPartSelect("protective", "pro_subProject", "pro_part");
+                setValue("pro_part", record.part);
+                setValue("pro_proMax", record.proMax);
+                setValue("pro_proMin", record.proMin);
+                setValue("pro_spaceMax", record.spaceMax);
+                setValue("pro_spaceMin", record.spaceMin);
+                setValue("pro_resultDesc", record.resultDesc);
+            }
+            if (type === "metal") {
+                setValue("met_deviceType", record.deviceType);
+                setValue("met_count", record.count);
+                setValue("met_spec", record.spec);
+                setValue("met_factory", record.factory);
+                setValue("met_model", record.model);
+                setValue("met_produceDate", record.produceDate);
+                setValue("met_desc", record.desc);
+                setValue("met_suggest", record.suggest);
+            }
+            if (type === "electrical") {
+                setValue("ele_deviceType", record.deviceType);
+                setValue("ele_count", record.count);
+                setValue("ele_factory", record.factory);
+                setValue("ele_model", record.model);
+                setValue("ele_produceDate", record.produceDate);
+                setValue("ele_insulation", record.insulation);
+                setValue("ele_ground", record.ground);
+                setValue("ele_runStatus", record.runStatus);
+                setValue("ele_desc", record.desc);
+                setValue("ele_suggest", record.suggest);
+            }
+            if (type === "safety") {
+                setValue("saf_projectType", record.projectType);
+                renderPartSelect("safety", "saf_projectType", "saf_subProject");
+                setValue("saf_subProject", record.subProject);
+                setValue("saf_standard", record.standard);
+                setValue("saf_subLevel", record.subLevel);
+                setValue("saf_projectLevel", record.projectLevel);
+                setValue("saf_suggestLevel", record.suggestLevel);
+                setValue("saf_basis", record.basis);
+            }
+            if (type === "problem") {
+                setValue("prob_type", record.type);
+                setValue("prob_level", record.level);
+                setValue("prob_subProject", record.subProject);
+                setValue("prob_part", record.part);
+                setValue("prob_desc", record.desc);
+                setValue("prob_suggest", record.suggest);
+                setValue("prob_affect", record.affect);
+                setValue("prob_recheck", record.recheck);
+                setValue("prob_principal", record.principal);
+                setValue("prob_status", record.status);
+            }
+        }
+
+        function resizeImageForStorage(file, callback) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const maxSide = 1280;
+                    let { width, height } = img;
+                    if (Math.max(width, height) > maxSide) {
+                        const ratio = maxSide / Math.max(width, height);
+                        width = Math.round(width * ratio);
+                        height = Math.round(height * ratio);
+                    }
+                    const canvas = document.createElement("canvas");
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0, width, height);
+                    callback(canvas.toDataURL("image/jpeg", 0.72));
+                };
+                img.onerror = function() {
+                    callback(event.target.result);
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 渲染所有表格
+        function renderAllTables() {
+            renderAppearanceTable();
+            renderSectionTable();
+            renderReboundTable();
+            renderProtectiveTable();
+            renderMetalTable();
+            renderElectricalTable();
+            renderSafetyTable();
+            renderProblemTable();
+        }
+
+        // 外观表格渲染
+        function renderAppearanceTable() {
+            const tbody = document.getElementById("appearanceTableBody");
+            tbody.innerHTML = '';
+            recordsWithIndex("appearance").forEach(({ item, index }) => {
                 const tr = document.createElement("tr");
-                tr.innerHTML = columns.map(col => `<td class="p-2">${item[col.key] || '-'}</td>`).join('') + 
-                    `<td class="p-2"><button type="button" data-index="${idx}" data-type="${dataKey}" class="deleteBtn text-red-500 text-sm">删除</button></td>`;
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.part}</td>
+                    <td class="p-2">${item.result}</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="appearance" class="editBtn text-primary text-sm mr-2">编辑</button>
+                        <button type="button" data-index="${index}" data-type="appearance" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
                 tbody.appendChild(tr);
             });
         }
 
-        function renderAppearanceTable() {
-            renderTable("appearanceTableBody", "appearance", [
-                { key: "stationName" }, { key: "part" }, { key: "result" }
-            ]);
-        }
+        // 断面尺寸表格渲染
         function renderSectionTable() {
-            renderTable("sectionTableBody", "section", [
-                { key: "stationName" }, { key: "part" }, { key: "testValue" }
-            ]);
-        }
-        function renderReboundTable() {
-            renderTable("reboundTableBody", "rebound", [
-                { key: "stationName" }, { key: "part" }, { key: "avgStrength" }
-            ]);
-        }
-        function renderProtectiveTable() {
-            renderTable("protectiveTableBody", "protective", [
-                { key: "stationName" }, { key: "part" }, { key: "proMax" }
-            ]);
-        }
-        function renderMetalTable() {
-            renderTable("metalTableBody", "metal", [
-                { key: "stationName" }, { key: "deviceType" }, { key: "suggest" }
-            ]);
-        }
-        function renderElectricalTable() {
-            renderTable("electricalTableBody", "electrical", [
-                { key: "stationName" }, { key: "deviceType" }, { key: "runStatus" }
-            ]);
-        }
-        function renderSafetyTable() {
-            renderTable("safetyTableBody", "safety", [
-                { key: "stationName" }, { key: "subProject" }, { key: "projectLevel" }
-            ]);
-        }
-        function renderProblemTable() {
-            renderTable("problemTableBody", "problem", [
-                { key: "id" }, { key: "stationName" }, { key: "type" }, { key: "status" }
-            ]);
+            const tbody = document.getElementById("sectionTableBody");
+            tbody.innerHTML = '';
+            recordsWithIndex("section").forEach(({ item, index }) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.part}</td>
+                    <td class="p-2">${item.testValue}${item.unit}</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="section" class="editBtn text-primary text-sm mr-2">编辑</button>
+                        <button type="button" data-index="${index}" data-type="section" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
         }
 
+        // 回弹碳化表格渲染
+        function renderReboundTable() {
+            const tbody = document.getElementById("reboundTableBody");
+            tbody.innerHTML = '';
+            recordsWithIndex("rebound").forEach(({ item, index }) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.part}</td>
+                    <td class="p-2">${item.angle || '水平'}</td>
+                    <td class="p-2">${item.maxStrength || '-'}MPa</td>
+                    <td class="p-2">${item.avgStrength || '-'}MPa</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="rebound" class="editBtn text-primary text-sm mr-2">编辑</button>
+                        <button type="button" data-index="${index}" data-type="rebound" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 保护层表格渲染
+        function renderProtectiveTable() {
+            const tbody = document.getElementById("protectiveTableBody");
+            tbody.innerHTML = '';
+            recordsWithIndex("protective").forEach(({ item, index }) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.part}</td>
+                    <td class="p-2">${item.proMin || '-'}-${item.proMax || '-'}mm</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="protective" class="editBtn text-primary text-sm mr-2">编辑</button>
+                        <button type="button" data-index="${index}" data-type="protective" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 金属结构表格渲染
+        function renderMetalTable() {
+            const tbody = document.getElementById("metalTableBody");
+            tbody.innerHTML = '';
+            recordsWithIndex("metal").forEach(({ item, index }) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.deviceType}</td>
+                    <td class="p-2">${item.suggest}</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="metal" class="editBtn text-primary text-sm mr-2">编辑</button>
+                        <button type="button" data-index="${index}" data-type="metal" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 机械电气表格渲染
+        function renderElectricalTable() {
+            const tbody = document.getElementById("electricalTableBody");
+            tbody.innerHTML = '';
+            recordsWithIndex("electrical").forEach(({ item, index }) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.deviceType}</td>
+                    <td class="p-2">${item.runStatus}</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="electrical" class="editBtn text-primary text-sm mr-2">编辑</button>
+                        <button type="button" data-index="${index}" data-type="electrical" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 安全评定表格渲染
+        function renderSafetyTable() {
+            const tbody = document.getElementById("safetyTableBody");
+            tbody.innerHTML = '';
+            recordsWithIndex("safety").forEach(({ item, index }) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.subProject}</td>
+                    <td class="p-2">${item.subLevel}</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="safety" class="editBtn text-primary text-sm mr-2">编辑</button>
+                        <button type="button" data-index="${index}" data-type="safety" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 问题台账表格渲染
+        function renderProblemTable() {
+            const tbody = document.getElementById("problemTableBody");
+            tbody.innerHTML = '';
+            recordsWithIndex("problem").forEach(({ item, index }) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="p-2">${item.id}</td>
+                    <td class="p-2">${item.stationName}</td>
+                    <td class="p-2">${item.type}</td>
+                    <td class="p-2">${item.status}</td>
+                    <td class="p-2">
+                        <button type="button" data-index="${index}" data-type="problem" class="editBtn text-primary text-sm mr-2">编辑</button>
+                        <button type="button" data-index="${index}" data-type="problem" class="deleteBtn text-red-500 text-sm">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 更新统计数字
         function updateCount() {
             document.getElementById("count_appearance").textContent = globalData.appearance.length;
             document.getElementById("count_section").textContent = globalData.section.length;
@@ -1368,303 +1634,625 @@
             document.getElementById("count_problem").textContent = globalData.problem.length;
         }
 
-        // ==================== 表单处理 ====================
-        function handlePhotoCapture(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const base64 = e.target.result;
-                currentPhotoNo = `PIC_${Date.now()}`;
-                globalData.photos.push({ photoNo: currentPhotoNo, base64: base64 });
-                
-                document.getElementById("app_photoNo").textContent = currentPhotoNo;
-                document.getElementById("app_photoImg").src = base64;
-                document.getElementById("app_photoPreview").classList.remove("hidden");
-                saveData();
-            };
-            reader.readAsDataURL(file);
+        // 标签页切换
+        function switchTab(tabName) {
+            // 隐藏所有内容
+            document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
+            // 显示目标内容
+            document.getElementById(`tab-${tabName}`).classList.remove("hidden");
+            // 更新标签样式
+            document.querySelectorAll(".tab-item").forEach(el => {
+                if (el.dataset.tab === tabName) {
+                    el.classList.remove("tab-inactive");
+                    el.classList.add("tab-active");
+                } else {
+                    el.classList.remove("tab-active");
+                    el.classList.add("tab-inactive");
+                }
+            });
+            // 记录当前标签
+            window.currentTabIndex = Array.from(document.querySelectorAll(".tab-item")).findIndex(el => el.dataset.tab === tabName);
         }
 
-        function clearPhoto() {
-            if (currentPhotoNo) {
-                globalData.photos = globalData.photos.filter(p => p.photoNo !== currentPhotoNo);
-            }
-            document.getElementById("app_photoPreview").classList.add("hidden");
-            document.getElementById("app_camera").value = "";
-            currentPhotoNo = null;
-            saveData();
-        }
-
-        function handleAppearanceSubmit(e) {
-            e.preventDefault();
-            if (!globalData.selectedStation) { alert("请先选择泵站！"); return; }
-
-            const record = {
-                routeNo: document.getElementById("app_routeNo").value,
-                stationName: document.getElementById("app_stationName").value,
-                subProject: document.getElementById("app_subProject").value,
-                part: document.getElementById("app_part").value,
-                material: document.getElementById("app_material").value,
-                result: document.getElementById("app_result").value,
-                remark: document.getElementById("app_remark").value,
-                photoNo: currentPhotoNo
-            };
-
-            const existingIdx = globalData.appearance.findIndex(r => 
-                r.routeNo == record.routeNo && r.subProject == record.subProject && r.part == record.part
-            );
-            if (existingIdx >= 0) {
-                globalData.appearance[existingIdx] = record;
-            } else {
-                globalData.appearance.push(record);
-            }
-            saveData();
-            alert("外观记录保存成功！");
-        }
-
-        function calculateDeviation() {
-            const test = parseFloat(document.getElementById("sec_testValue").value) || 0;
-            const design = parseFloat(document.getElementById("sec_designValue").value) || 0;
-            if (design) {
-                document.getElementById("sec_deviation").value = (test - design).toFixed(3);
-            }
-        }
-
-        function handleSectionSubmit(e) {
-            e.preventDefault();
-            if (!globalData.selectedStation) { alert("请先选择泵站！"); return; }
-
-            const record = {
-                routeNo: document.getElementById("sec_routeNo").value,
-                stationName: document.getElementById("sec_stationName").value,
-                subProject: document.getElementById("sec_subProject").value,
-                part: document.getElementById("sec_part").value,
-                param: document.getElementById("sec_param").value,
-                unit: document.getElementById("sec_unit").value,
-                testValue: document.getElementById("sec_testValue").value,
-                designValue: document.getElementById("sec_designValue").value,
-                deviation: document.getElementById("sec_deviation").value,
-                remark: document.getElementById("sec_remark").value
-            };
-
-            const existingIdx = globalData.section.findIndex(r => 
-                r.routeNo == record.routeNo && r.subProject == record.subProject && r.part == record.part
-            );
-            if (existingIdx >= 0) {
-                globalData.section[existingIdx] = record;
-            } else {
-                globalData.section.push(record);
-            }
-            saveData();
-            alert("断面尺寸记录保存成功！");
-        }
-
-        function handleReboundSubmit(e) {
-            e.preventDefault();
-            if (!globalData.selectedStation) { alert("请先选择泵站！"); return; }
-
-            const record = {
-                routeNo: document.getElementById("reb_routeNo").value,
-                stationName: document.getElementById("reb_stationName").value,
-                subProject: document.getElementById("reb_subProject").value,
-                part: document.getElementById("reb_part").value,
-                carbonDepth: document.getElementById("reb_carbonDepth").value,
-                minStrength: document.getElementById("reb_minStrength").value,
-                avgStrength: document.getElementById("reb_avgStrength").value,
-                stdDev: document.getElementById("reb_stdDev").value,
-                predictStrength: document.getElementById("reb_predictStrength").value,
-                resultDesc: document.getElementById("reb_resultDesc").value
-            };
-
-            const existingIdx = globalData.rebound.findIndex(r => 
-                r.routeNo == record.routeNo && r.subProject == record.subProject && r.part == record.part
-            );
-            if (existingIdx >= 0) {
-                globalData.rebound[existingIdx] = record;
-            } else {
-                globalData.rebound.push(record);
-            }
-            saveData();
-            alert("回弹碳化记录保存成功！");
-        }
-
-        function handleProtectiveSubmit(e) {
-            e.preventDefault();
-            if (!globalData.selectedStation) { alert("请先选择泵站！"); return; }
-
-            const record = {
-                routeNo: document.getElementById("pro_routeNo").value,
-                stationName: document.getElementById("pro_stationName").value,
-                subProject: document.getElementById("pro_subProject").value,
-                part: document.getElementById("pro_part").value,
-                proMax: document.getElementById("pro_proMax").value,
-                proMin: document.getElementById("pro_proMin").value,
-                spaceMax: document.getElementById("pro_spaceMax").value,
-                spaceMin: document.getElementById("pro_spaceMin").value,
-                resultDesc: document.getElementById("pro_resultDesc").value
-            };
-
-            const existingIdx = globalData.protective.findIndex(r => 
-                r.routeNo == record.routeNo && r.subProject == record.subProject && r.part == record.part
-            );
-            if (existingIdx >= 0) {
-                globalData.protective[existingIdx] = record;
-            } else {
-                globalData.protective.push(record);
-            }
-            saveData();
-            alert("保护层记录保存成功！");
-        }
-
-        function handleMetalSubmit(e) {
-            e.preventDefault();
-            if (!globalData.selectedStation) { alert("请先选择泵站！"); return; }
-
-            const record = {
-                routeNo: document.getElementById("met_routeNo").value,
-                stationName: document.getElementById("met_stationName").value,
-                deviceType: document.getElementById("met_deviceType").value,
-                count: document.getElementById("met_count").value,
-                spec: document.getElementById("met_spec").value,
-                factory: document.getElementById("met_factory").value,
-                model: document.getElementById("met_model").value,
-                produceDate: document.getElementById("met_produceDate").value,
-                desc: document.getElementById("met_desc").value,
-                suggest: document.getElementById("met_suggest").value
-            };
-            globalData.metal.push(record);
-            saveData();
-            alert("金属结构记录保存成功！");
-            clearSingleForm("metalForm");
-        }
-
-        function handleElectricalSubmit(e) {
-            e.preventDefault();
-            if (!globalData.selectedStation) { alert("请先选择泵站！"); return; }
-
-            const record = {
-                routeNo: document.getElementById("ele_routeNo").value,
-                stationName: document.getElementById("ele_stationName").value,
-                deviceType: document.getElementById("ele_deviceType").value,
-                count: document.getElementById("ele_count").value,
-                factory: document.getElementById("ele_factory").value,
-                model: document.getElementById("ele_model").value,
-                insulation: document.getElementById("ele_insulation").value,
-                ground: document.getElementById("ele_ground").value,
-                runStatus: document.getElementById("ele_runStatus").value,
-                desc: document.getElementById("ele_desc").value,
-                suggest: document.getElementById("ele_suggest").value
-            };
-            globalData.electrical.push(record);
-            saveData();
-            alert("机械电气记录保存成功！");
-            clearSingleForm("electricalForm");
-        }
-
-        function handleSafetySubmit(e) {
-            e.preventDefault();
-            if (!globalData.selectedStation) { alert("请先选择泵站！"); return; }
-
-            const record = {
-                routeNo: document.getElementById("saf_routeNo").value,
-                stationName: document.getElementById("saf_stationName").value,
-                projectType: document.getElementById("saf_projectType").value,
-                subProject: document.getElementById("saf_subProject").value,
-                standard: document.getElementById("saf_standard").value,
-                subLevel: document.getElementById("saf_subLevel").value,
-                projectLevel: document.getElementById("saf_projectLevel").value,
-                suggestLevel: document.getElementById("saf_suggestLevel").value,
-                basis: document.getElementById("saf_basis").value
-            };
-            globalData.safety.push(record);
-            saveData();
-            alert("安全评定记录保存成功！");
-            clearSingleForm("safetyForm");
-        }
-
-        function handleProblemSubmit(e) {
-            e.preventDefault();
-            if (!globalData.selectedStation) { alert("请先选择泵站！"); return; }
-
-            const record = {
-                id: globalData.problem.length + 1,
-                routeNo: document.getElementById("prob_routeNo").value,
-                stationName: document.getElementById("prob_stationName").value,
-                type: document.getElementById("prob_type").value,
-                level: document.getElementById("prob_level").value,
-                subProject: document.getElementById("prob_subProject").value,
-                part: document.getElementById("prob_part").value,
-                desc: document.getElementById("prob_desc").value,
-                suggest: document.getElementById("prob_suggest").value,
-                affect: document.getElementById("prob_affect").value,
-                recheck: document.getElementById("prob_recheck").value,
-                principal: document.getElementById("prob_principal").value,
-                status: document.getElementById("prob_status").value
-            };
-            globalData.problem.push(record);
-            saveData();
-            alert("问题台账记录保存成功！");
-            document.getElementById("prob_id").value = globalData.problem.length + 1;
-            clearSingleForm("problemForm");
-        }
-
-        // ==================== 导出逻辑 ====================
-        function exportExcel() {
+        // 生成Excel
+        function generateExcel() {
             const wb = XLSX.utils.book_new();
-            
-            if (globalData.appearance.length > 0) {
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(globalData.appearance), "外观检测");
-            }
-            if (globalData.section.length > 0) {
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(globalData.section), "断面尺寸");
-            }
-            if (globalData.rebound.length > 0) {
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(globalData.rebound), "回弹碳化");
-            }
-            if (globalData.protective.length > 0) {
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(globalData.protective), "保护层");
-            }
-            if (globalData.metal.length > 0) {
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(globalData.metal), "金属结构");
-            }
-            if (globalData.electrical.length > 0) {
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(globalData.electrical), "机械电气");
-            }
-            if (globalData.safety.length > 0) {
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(globalData.safety), "安全评定");
-            }
-            if (globalData.problem.length > 0) {
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(globalData.problem), "问题台账");
-            }
 
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-            saveAs(new Blob([wbout], { type: 'application/octet-stream' }), `排水站检测记录_${new Date().toLocaleDateString()}.xlsx`);
+            // 1. 外观检测Sheet
+            const appearanceHeader = ["路线序号", "泵站名称", "报告表号", "序号", "分项工程", "检测部位", "材质类型", "检测结果", "检测日期", "检测人", "照片编号", "是否关键项", "备注"];
+            const appearanceData = globalData.appearance.map((item, idx) => [
+                item.routeNo, item.stationName, `表${item.routeNo}-3-1`, idx+1, item.subProject, item.part, item.material, item.result, '', '', item.photoNo || '', '否', item.remark
+            ]);
+            const appearanceWs = XLSX.utils.aoa_to_sheet([appearanceHeader, ...appearanceData]);
+            XLSX.utils.book_append_sheet(wb, appearanceWs, "06外观检测");
+
+            // 2. 断面尺寸Sheet
+            const sectionHeader = ["路线序号", "泵站名称", "报告表号", "序号", "分项工程", "部位", "参数名称", "单位", "检测值", "设计值", "偏差", "照片/草图编号", "依据", "备注"];
+            const sectionData = globalData.section.map((item, idx) => [
+                item.routeNo, item.stationName, `表${item.routeNo}-3-1-1`, idx+1, item.subProject, item.part, item.param, item.unit, item.testValue, item.designValue, item.deviation, '', 'SL734-2016《水利工程质量检测技术规程》', item.remark
+            ]);
+            const sectionWs = XLSX.utils.aoa_to_sheet([sectionHeader, ...sectionData]);
+            XLSX.utils.book_append_sheet(wb, sectionWs, "07断面尺寸");
+
+            // 3. 回弹碳化Sheet
+            const reboundHeader = ["路线序号", "泵站名称", "报告表号", "序号", "分项工程", "检测部位", "回弹角度", "碳化深度(mm)", "最小强度(MPa)", "最大强度(MPa)", "平均强度(MPa)", "标准差(MPa)", "推定强度(MPa)", "原始记录编号", "结果描述句", "备注"];
+            const reboundData = globalData.rebound.map((item, idx) => [
+                item.routeNo, item.stationName, `表${item.routeNo}-3-${idx+1}-强度`, idx+1, item.subProject, item.part, item.angle || '水平', item.carbonDepth, item.minStrength, item.maxStrength, item.avgStrength, item.stdDev, item.predictStrength, '', item.resultDesc, ''
+            ]);
+            const reboundWs = XLSX.utils.aoa_to_sheet([reboundHeader, ...reboundData]);
+            XLSX.utils.book_append_sheet(wb, reboundWs, "08回弹碳化");
+
+            // 4. 保护层Sheet
+            const protectiveHeader = ["路线序号", "泵站名称", "报告表号", "序号", "分项工程", "检测部位", "保护层最大值mm", "保护层最小值mm", "钢筋间距最大值mm", "钢筋间距最小值mm", "原始记录编号", "结果描述句", "备注"];
+            const protectiveData = globalData.protective.map((item, idx) => [
+                item.routeNo, item.stationName, `表${item.routeNo}-3-${idx+1}-保护层`, idx+1, item.subProject, item.part, item.proMax, item.proMin, item.spaceMax, item.spaceMin, '', item.resultDesc, ''
+            ]);
+            const protectiveWs = XLSX.utils.aoa_to_sheet([protectiveHeader, ...protectiveData]);
+            XLSX.utils.book_append_sheet(wb, protectiveWs, "10保护层");
+
+            // 5. 金属结构Sheet
+            const metalHeader = ["路线序号", "泵站名称", "报告小节", "设备类别", "数量", "规格/尺寸", "生产厂家", "型号/编号", "出厂日期", "外观与运行描述", "照片编号", "报告图号", "建议类别", "备注"];
+            const metalData = globalData.metal.map((item, idx) => [
+                item.routeNo, item.stationName, `${item.routeNo}.3 金属结构检测结果`, item.deviceType, item.count, item.spec, item.factory, item.model, item.produceDate, item.desc, '', `图${item.routeNo}-3-JS${idx+1}`, item.suggest, ''
+            ]);
+            const metalWs = XLSX.utils.aoa_to_sheet([metalHeader, ...metalData]);
+            XLSX.utils.book_append_sheet(wb, metalWs, "12金属结构");
+
+            // 6. 机械电气Sheet
+            const electricalHeader = ["路线序号", "泵站名称", "报告小节", "设备类别", "数量", "生产厂家", "型号/编号", "出厂日期", "绝缘电阻MΩ", "接地电阻Ω", "试运行状态", "外观与运行描述", "照片编号", "报告图号", "建议类别", "备注"];
+            const electricalData = globalData.electrical.map((item, idx) => [
+                item.routeNo, item.stationName, `${item.routeNo}.3 机械电气检测结果`, item.deviceType, item.count, item.factory, item.model, item.produceDate, item.insulation, item.ground, item.runStatus, item.desc, '', `图${item.routeNo}-3-JD${idx+1}`, item.suggest, ''
+            ]);
+            const electricalWs = XLSX.utils.aoa_to_sheet([electricalHeader, ...electricalData]);
+            XLSX.utils.book_append_sheet(wb, electricalWs, "13机械电气");
+
+            // 7. 安全评定Sheet
+            const safetyHeader = ["路线序号", "泵站名称", "报告表号", "序号", "工程类别", "分项工程名称", "评定条款或标准", "分项工程建议安全类别", "工程建议/安全类别", "安全评估/建议类别", "判定依据/主要问题", "备注"];
+            const safetyData = globalData.safety.map((item, idx) => [
+                item.routeNo, item.stationName, `表${item.routeNo}-4-1`, idx+1, item.projectType, item.subProject, item.standard, item.subLevel, item.projectLevel, item.suggestLevel, item.basis, ''
+            ]);
+            const safetyWs = XLSX.utils.aoa_to_sheet([safetyHeader, ...safetyData]);
+            XLSX.utils.book_append_sheet(wb, safetyWs, "14安全类别评定");
+
+            // 8. 问题台账Sheet
+            const problemHeader = ["问题编号", "路线序号", "泵站名称", "问题类别", "分项工程", "检测部位", "问题描述", "严重程度", "照片编号", "对应报告段落", "建议措施", "是否影响类别", "是否需复核", "责任/对接人", "状态", "备注"];
+            const problemData = globalData.problem.map((item, idx) => [
+                item.id, item.routeNo, item.stationName, item.type, item.subProject, item.part, item.desc, item.level, '', '', item.suggest, item.affect, item.recheck, item.principal, item.status, ''
+            ]);
+            const problemWs = XLSX.utils.aoa_to_sheet([problemHeader, ...problemData]);
+            XLSX.utils.book_append_sheet(wb, problemWs, "15问题台账");
+
+            // 9. 报告文本速填Sheet
+            const reportHeader = ["路线序号", "泵站名称", "工程概况句", "外观质量汇总句", "断面尺寸汇总句", "强度汇总句", "保护层汇总句", "金属结构句", "机械电气句", "结论句", "备注"];
+            const reportData = pumpStations.map(station => {
+                const appCount = globalData.appearance.filter(i => i.routeNo == station.routeNo).length;
+                const secCount = globalData.section.filter(i => i.routeNo == station.routeNo).length;
+                const rebCount = globalData.rebound.filter(i => i.routeNo == station.routeNo).length;
+                const proCount = globalData.protective.filter(i => i.routeNo == station.routeNo).length;
+                return [
+                    station.routeNo,
+                    station.name,
+                    `${station.name}设计流量为${station.designFlow}，建设性质为${station.buildType}，现场坐标为${station.gps}。`,
+                    `本次检测${station.name}外观质量共${appCount}个测点，检测结果详见外观检测成果表。`,
+                    `检测${station.name}主要构筑物断面尺寸${secCount}组，检测结果详见表${station.routeNo}-3-1-1。`,
+                    `回弹法检测${station.name}混凝土抗压强度及碳化深度，检测结果详见相应强度检测成果表。`,
+                    `检测${station.name}混凝土钢筋保护层厚度及钢筋间距，检测结果见相应保护层检测成果表。`,
+                    '',
+                    '',
+                    `依据《泵站安全鉴定规程》（SL316-2015）附录C，${station.name}综合安全评估类别建议为___类。`,
+                    ''
+                ];
+            });
+            const reportWs = XLSX.utils.aoa_to_sheet([reportHeader, ...reportData]);
+            XLSX.utils.book_append_sheet(wb, reportWs, "17报告文本速填");
+
+            // 10. 照片编号清单Sheet
+            const photoHeader = ["路线序号", "泵站名称", "照片编号", "报告图号", "拍摄对象", "远景/近景", "是否入报告", "照片说明/图名", "备注"];
+            const photoData = globalData.photos.map((item, idx) => [
+                item.routeNo, item.stationName, item.photoNo, item.figureNo, item.subject, item.viewType, item.inReport, item.desc, ''
+            ]);
+            const photoWs = XLSX.utils.aoa_to_sheet([photoHeader, ...photoData]);
+            XLSX.utils.book_append_sheet(wb, photoWs, "16照片编号清单");
+
+            // 11. 人员仪器Sheet
+            const personHeader = ["类别", "名称/姓名", "职务/型号", "联系电话/精度", "用途/备注"];
+            const personData = [
+                ["沈阳市", "赵正武", "农水处处长", "13478114527", "现场协调"],
+                ["沈阳市", "佟浩", "农水处工作人员", "18540045288", "现场协调"],
+                ["辽中区", "钟浩", "副局长", "13998346669", "现场协调"],
+                ["辽中区", "王卫", "科长", "13889238222", "现场协调"],
+                ["辽中区", "李彤", "设计人员", "15714102533", "现场协调"],
+                ["", "", "", "", ""],
+                ["仪器设备", "混凝土回弹仪", "ZC3-A或ZC3-T", "0.1MPa", "混凝土抗压强度"],
+                ["仪器设备", "数显碳化深度尺", "/", "0.01mm", "碳化深度"],
+                ["仪器设备", "冲击钻/手持钻", "/", "/", "碳化孔、现场辅助"],
+                ["仪器设备", "钢卷尺", "5m", "1mm", "局部尺寸"],
+                ["仪器设备", "米尺", "50m", "1mm", "断面尺寸"],
+                ["仪器设备", "钢筋扫描仪", "HC-GY61T或同等", "/", "保护层厚度及钢筋间距"],
+                ["仪器设备", "游标卡尺", "0-300mm", "0.02mm", "金属结构局部尺寸"],
+                ["仪器设备", "超声波测厚仪", "TT300或同等", "0.01mm", "钢管/闸门必要时测厚"],
+                ["仪器设备", "绝缘电阻表", "按现场电压等级", "/", "电机及电气回路绝缘"],
+                ["仪器设备", "接地电阻测试仪", "/", "/", "接地连续性及接地电阻"],
+                ["仪器设备", "照相设备/定位设备", "手机或相机/GPS", "/", "照片、定位、时间记录"],
+                ["仪器设备", "安全防护用品", "安全帽、救生衣、反光背心、绝缘手套", "/", "临水、电气及泵房安全"]
+            ];
+            const personWs = XLSX.utils.aoa_to_sheet([personHeader, ...personData]);
+            XLSX.utils.book_append_sheet(wb, personWs, "18人员仪器");
+
+            // 导出文件
+            XLSX.writeFile(wb, `排水站检测台账_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
         }
 
-        function exportPhotos() {
-            if (globalData.photos.length === 0) {
-                alert("没有照片可导出！");
-                return;
-            }
-            const zip = new JSZip();
-            globalData.photos.forEach(photo => {
-                const base64Data = photo.base64.split(',')[1];
-                zip.file(`${photo.photoNo}.jpg`, base64Data, { base64: true });
-            });
-            zip.generateAsync({ type: "blob" }).then(function(content) {
-                saveAs(content, `检测照片_${new Date().toLocaleDateString()}.zip`);
-            });
-        }
+        // 页面加载完成初始化
+        document.addEventListener("DOMContentLoaded", function() {
+            initData();
+            window.currentTabIndex = 0;
+            const tabItems = document.querySelectorAll(".tab-item");
+            const tabCount = tabItems.length;
 
-        function clearAllData() {
-            if (confirm("确定要清空所有数据吗？此操作不可恢复！")) {
-                globalData = getEmptyData();
+            // 泵站选择事件
+            document.getElementById("pumpStationSelect").addEventListener("change", function(e) {
+                const routeNo = e.target.value;
+                if (!routeNo) return;
+                const station = pumpStations.find(s => s.routeNo == routeNo);
+                if (station) {
+                    globalData.selectedStation = station;
+                    renderStationInfo(station);
+                    saveData();
+                }
+            });
+
+            // 标签页点击事件
+            tabItems.forEach(item => {
+                item.addEventListener("click", function() {
+                    switchTab(this.dataset.tab);
+                });
+            });
+
+            // 上下页按钮
+            document.getElementById("prevTabBtn").addEventListener("click", function() {
+                if (window.currentTabIndex > 0) {
+                    window.currentTabIndex--;
+                    switchTab(tabItems[window.currentTabIndex].dataset.tab);
+                }
+            });
+
+            document.getElementById("nextTabBtn").addEventListener("click", function() {
+                if (window.currentTabIndex < tabCount - 1) {
+                    window.currentTabIndex++;
+                    switchTab(tabItems[window.currentTabIndex].dataset.tab);
+                }
+            });
+
+            // 外观检测分项工程变化
+            document.getElementById("app_subProject").addEventListener("change", function() {
+                renderPartSelect("appearance", "app_subProject", "app_part");
+            });
+            document.getElementById("app_part").addEventListener("change", function() {
+                loadRecordForCurrentPart("appearance");
+            });
+
+            // 断面尺寸分项工程变化
+            document.getElementById("sec_subProject").addEventListener("change", function() {
+                renderPartSelect("section", "sec_subProject", "sec_part");
+            });
+            document.getElementById("sec_part").addEventListener("change", function() {
+                loadRecordForCurrentPart("section");
+            });
+            document.getElementById("sec_param").addEventListener("change", function() {
+                loadRecordForCurrentPart("section");
+            });
+
+            // 回弹碳化分项工程变化
+            document.getElementById("reb_subProject").addEventListener("change", function() {
+                renderPartSelect("rebound", "reb_subProject", "reb_part");
+            });
+            document.getElementById("reb_part").addEventListener("change", function() {
+                loadRecordForCurrentPart("rebound");
+            });
+
+            // 保护层分项工程变化
+            document.getElementById("pro_subProject").addEventListener("change", function() {
+                renderPartSelect("protective", "pro_subProject", "pro_part");
+            });
+            document.getElementById("pro_part").addEventListener("change", function() {
+                loadRecordForCurrentPart("protective");
+            });
+
+            // 安全评定工程类别变化
+            document.getElementById("saf_projectType").addEventListener("change", function() {
+                renderPartSelect("safety", "saf_projectType", "saf_subProject");
+            });
+            document.getElementById("saf_subProject").addEventListener("change", function() {
+                loadRecordForCurrentPart("safety");
+            });
+
+            // 断面尺寸自动计算偏差
+            ["sec_testValue", "sec_designValue"].forEach(id => {
+                document.getElementById(id).addEventListener("input", function() {
+                    const test = parseFloat(document.getElementById("sec_testValue").value) || 0;
+                    const design = parseFloat(document.getElementById("sec_designValue").value) || 0;
+                    document.getElementById("sec_deviation").value = (test - design).toFixed(3);
+                });
+            });
+
+            // 外观拍照功能
+            document.getElementById("app_takePhoto").addEventListener("click", function() {
+                document.getElementById("app_camera").click();
+            });
+
+            document.getElementById("app_camera").addEventListener("change", function(e) {
+                const file = e.target.files[0];
+                if (!file || !globalData.selectedStation) return;
+
+                resizeImageForStorage(file, function(base64) {
+                    const photoNo = `PHOTO_${globalData.selectedStation.routeNo}_${Date.now().toString().slice(-6)}`;
+                    const figureNo = `图${globalData.selectedStation.routeNo}-3-${globalData.appearance.length + 1}`;
+                    const partValue = document.getElementById("app_part").value;
+                    
+                    // 保存照片
+                    globalData.photos.push({
+                        routeNo: globalData.selectedStation.routeNo,
+                        stationName: globalData.selectedStation.name,
+                        photoNo: photoNo,
+                        figureNo: figureNo,
+                        subject: `${document.getElementById("app_subProject").value}-${document.getElementById("app_part").value}`,
+                        viewType: "近景",
+                        inReport: "是",
+                        desc: `${partValue}现场检测照片`,
+                        base64: base64
+                    });
+
+                    // 预览
+                    document.getElementById("app_photoNo").textContent = photoNo;
+                    document.getElementById("app_photoImg").src = base64;
+                    document.getElementById("app_photoPreview").classList.remove("hidden");
+                    window.currentPhotoNo = photoNo;
+
+                    saveData();
+                });
+            });
+
+            // 清除照片
+            document.getElementById("app_clearPhoto").addEventListener("click", function() {
+                document.getElementById("app_camera").value = '';
+                document.getElementById("app_photoPreview").classList.add("hidden");
+                window.currentPhotoNo = null;
+            });
+
+            // 表单提交事件
+            // 外观表单
+            document.getElementById("appearanceForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    subProject: document.getElementById("app_subProject").value,
+                    part: document.getElementById("app_part").value,
+                    material: document.getElementById("app_material").value,
+                    result: document.getElementById("app_result").value,
+                    photoNo: window.currentPhotoNo || '',
+                    remark: document.getElementById("app_remark").value
+                };
+
+                upsertRecord("appearance", data, ["routeNo", "subProject", "part"]);
                 saveData();
-                renderStationList();
-                alert("所有数据已清空！");
-            }
-        }
+                renderStationInfo(globalData.selectedStation);
+                loadRecordForCurrentPart("appearance");
+                alert("保存成功！");
+            });
+
+            // 断面尺寸表单
+            document.getElementById("sectionForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    subProject: document.getElementById("sec_subProject").value,
+                    part: document.getElementById("sec_part").value,
+                    param: document.getElementById("sec_param").value,
+                    unit: document.getElementById("sec_unit").value,
+                    testValue: document.getElementById("sec_testValue").value,
+                    designValue: document.getElementById("sec_designValue").value,
+                    deviation: document.getElementById("sec_deviation").value,
+                    remark: document.getElementById("sec_remark").value
+                };
+
+                upsertRecord("section", data, ["routeNo", "subProject", "part", "param"]);
+                saveData();
+                renderStationInfo(globalData.selectedStation);
+                loadRecordForCurrentPart("section");
+                alert("保存成功！");
+            });
+
+            // 回弹碳化表单
+            document.getElementById("reboundForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    subProject: document.getElementById("reb_subProject").value,
+                    part: document.getElementById("reb_part").value,
+                    angle: document.getElementById("reb_angle").value || "水平",
+                    carbonDepth: document.getElementById("reb_carbonDepth").value,
+                    minStrength: document.getElementById("reb_minStrength").value,
+                    maxStrength: document.getElementById("reb_maxStrength").value,
+                    avgStrength: document.getElementById("reb_avgStrength").value,
+                    stdDev: document.getElementById("reb_stdDev").value,
+                    predictStrength: document.getElementById("reb_predictStrength").value,
+                    resultDesc: document.getElementById("reb_resultDesc").value
+                };
+
+                upsertRecord("rebound", data, ["routeNo", "subProject", "part"]);
+                saveData();
+                renderStationInfo(globalData.selectedStation);
+                loadRecordForCurrentPart("rebound");
+                alert("保存成功！");
+            });
+
+            // 保护层表单
+            document.getElementById("protectiveForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    subProject: document.getElementById("pro_subProject").value,
+                    part: document.getElementById("pro_part").value,
+                    proMax: document.getElementById("pro_proMax").value,
+                    proMin: document.getElementById("pro_proMin").value,
+                    spaceMax: document.getElementById("pro_spaceMax").value,
+                    spaceMin: document.getElementById("pro_spaceMin").value,
+                    resultDesc: document.getElementById("pro_resultDesc").value
+                };
+
+                upsertRecord("protective", data, ["routeNo", "subProject", "part"]);
+                saveData();
+                renderStationInfo(globalData.selectedStation);
+                loadRecordForCurrentPart("protective");
+                alert("保存成功！");
+            });
+
+            // 金属结构表单
+            document.getElementById("metalForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    deviceType: document.getElementById("met_deviceType").value,
+                    count: document.getElementById("met_count").value,
+                    spec: document.getElementById("met_spec").value,
+                    factory: document.getElementById("met_factory").value,
+                    model: document.getElementById("met_model").value,
+                    produceDate: document.getElementById("met_produceDate").value,
+                    desc: document.getElementById("met_desc").value,
+                    suggest: document.getElementById("met_suggest").value
+                };
+
+                upsertRecord("metal", data, ["routeNo", "deviceType"]);
+                saveData();
+                renderStationInfo(globalData.selectedStation);
+                alert("保存成功！");
+            });
+
+            // 机械电气表单
+            document.getElementById("electricalForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    deviceType: document.getElementById("ele_deviceType").value,
+                    count: document.getElementById("ele_count").value,
+                    factory: document.getElementById("ele_factory").value,
+                    model: document.getElementById("ele_model").value,
+                    produceDate: document.getElementById("ele_produceDate").value,
+                    insulation: document.getElementById("ele_insulation").value,
+                    ground: document.getElementById("ele_ground").value,
+                    runStatus: document.getElementById("ele_runStatus").value,
+                    desc: document.getElementById("ele_desc").value,
+                    suggest: document.getElementById("ele_suggest").value
+                };
+
+                upsertRecord("electrical", data, ["routeNo", "deviceType"]);
+                saveData();
+                renderStationInfo(globalData.selectedStation);
+                alert("保存成功！");
+            });
+
+            // 安全评定表单
+            document.getElementById("safetyForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    projectType: document.getElementById("saf_projectType").value,
+                    subProject: document.getElementById("saf_subProject").value,
+                    standard: document.getElementById("saf_standard").value,
+                    subLevel: document.getElementById("saf_subLevel").value,
+                    projectLevel: document.getElementById("saf_projectLevel").value,
+                    suggestLevel: document.getElementById("saf_suggestLevel").value,
+                    basis: document.getElementById("saf_basis").value
+                };
+
+                upsertRecord("safety", data, ["routeNo", "projectType", "subProject"]);
+                saveData();
+                renderStationInfo(globalData.selectedStation);
+                loadRecordForCurrentPart("safety");
+                alert("保存成功！");
+            });
+
+            // 问题台账表单
+            document.getElementById("problemForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+
+                const data = {
+                    id: globalData.problem.length + 1,
+                    routeNo: globalData.selectedStation.routeNo,
+                    stationName: globalData.selectedStation.name,
+                    type: document.getElementById("prob_type").value,
+                    level: document.getElementById("prob_level").value,
+                    subProject: document.getElementById("prob_subProject").value,
+                    part: document.getElementById("prob_part").value,
+                    desc: document.getElementById("prob_desc").value,
+                    suggest: document.getElementById("prob_suggest").value,
+                    affect: document.getElementById("prob_affect").value,
+                    recheck: document.getElementById("prob_recheck").value,
+                    principal: document.getElementById("prob_principal").value,
+                    status: document.getElementById("prob_status").value
+                };
+
+                globalData.problem.push(data);
+                saveData();
+                this.reset();
+                renderStationInfo(globalData.selectedStation);
+                alert("保存成功！");
+            });
+
+            // 重置按钮事件
+            document.getElementById("app_reset").addEventListener("click", function() {
+                document.getElementById("appearanceForm").reset();
+                document.getElementById("app_photoPreview").classList.add("hidden");
+                window.currentPhotoNo = null;
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("sec_reset").addEventListener("click", function() {
+                document.getElementById("sectionForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("reb_reset").addEventListener("click", function() {
+                document.getElementById("reboundForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("pro_reset").addEventListener("click", function() {
+                document.getElementById("protectiveForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("met_reset").addEventListener("click", function() {
+                document.getElementById("metalForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("ele_reset").addEventListener("click", function() {
+                document.getElementById("electricalForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("saf_reset").addEventListener("click", function() {
+                document.getElementById("safetyForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            document.getElementById("prob_reset").addEventListener("click", function() {
+                document.getElementById("problemForm").reset();
+                renderStationInfo(globalData.selectedStation);
+            });
+
+            // 删除按钮事件
+            document.addEventListener("click", function(e) {
+                if (e.target.classList.contains("editBtn")) {
+                    const type = e.target.dataset.type;
+                    const index = Number(e.target.dataset.index);
+                    loadRecordByIndex(type, index);
+                }
+                if (e.target.classList.contains("deleteBtn")) {
+                    const type = e.target.dataset.type;
+                    const index = e.target.dataset.index;
+                    if (confirm("确定要删除这条记录吗？")) {
+                        globalData[type].splice(index, 1);
+                        saveData();
+                    }
+                }
+            });
+
+            // 导出Excel按钮
+            document.getElementById("exportExcelBtn").addEventListener("click", function() {
+                if (confirm("确定要导出Excel台账吗？")) {
+                    generateExcel();
+                }
+            });
+
+            // 导出照片压缩包
+            document.getElementById("exportPhotoBtn").addEventListener("click", async function() {
+                if (globalData.photos.length === 0) {
+                    alert("暂无照片可导出！");
+                    return;
+                }
+
+                if (confirm("确定要导出照片压缩包吗？")) {
+                    const zip = new JSZip();
+                    globalData.photos.forEach(photo => {
+                        const base64 = photo.base64.split(',')[1];
+                        zip.file(`${photo.stationName}/${photo.photoNo}.jpg`, base64, { base64: true });
+                    });
+
+                    const zipBlob = await zip.generateAsync({ type: "blob" });
+                    saveAs(zipBlob, `排水站检测照片_${new Date().toLocaleDateString().replace(/\//g, '-')}.zip`);
+                }
+            });
+
+            // 清空所有数据
+            document.getElementById("clearAllDataBtn").addEventListener("click", function() {
+                if (confirm("⚠️ 警告：此操作将清空所有本地检测数据，且不可恢复！确定要继续吗？")) {
+                    localStorage.removeItem(STORAGE_KEY);
+                    globalData = {
+                        selectedStation: null,
+                        appearance: [],
+                        section: [],
+                        rebound: [],
+                        protective: [],
+                        metal: [],
+                        electrical: [],
+                        safety: [],
+                        problem: [],
+                        photos: []
+                    };
+                    initData();
+                    alert("所有数据已清空！");
+                }
+            });
+        });
     </script>
 </body>
 </html>
