@@ -54,6 +54,11 @@
             }
         }
     </style>
+    <style>
+        html, body {
+            overscroll-behavior-y: contain;
+        }
+    </style>
 </head>
 <body class="bg-gray-50 min-h-screen pb-20">
     <!-- 顶部标题 -->
@@ -248,35 +253,79 @@
                             </select>
                         </div>
                     </div>
-                    <div class="form-item">
-                        <label class="form-label">参数名称</label>
-                        <select class="input-base" id="sec_param">
-                            <option value="宽度">宽度</option>
-                            <option value="厚度">厚度</option>
-                            <option value="长度">长度</option>
-                            <option value="高度">高度</option>
-                        </select>
-                    </div>
-                    <div class="grid grid-cols-3 gap-3 mb-4">
-                        <div class="form-item mb-0">
-                            <label class="form-label">单位</label>
-                            <select class="input-base" id="sec_unit">
-                                <option value="m">m</option>
-                                <option value="cm">cm</option>
-                            </select>
+                    <div class="space-y-4 mb-4">
+                        <div class="p-3 bg-neutral rounded-lg">
+                            <h3 class="text-sm font-semibold text-gray-800 mb-3">长度</h3>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <div class="form-item mb-0">
+                                    <label class="form-label">单位</label>
+                                    <select class="input-base" id="sec_lengthUnit">
+                                        <option value="cm" selected>cm</option>
+                                        <option value="m">m</option>
+                                    </select>
+                                </div>
+                                <div class="form-item mb-0">
+                                    <label class="form-label">检测值</label>
+                                    <input type="number" step="0.001" class="input-base" id="sec_lengthTestValue">
+                                </div>
+                                <div class="form-item mb-0">
+                                    <label class="form-label">设计值</label>
+                                    <input type="number" step="0.001" class="input-base" id="sec_lengthDesignValue">
+                                </div>
+                                <div class="form-item mb-0">
+                                    <label class="form-label">偏差值</label>
+                                    <input type="number" step="0.001" class="input-base" id="sec_lengthDeviation" readonly>
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-item mb-0">
-                            <label class="form-label">检测值</label>
-                            <input type="number" step="0.001" class="input-base" id="sec_testValue">
+                        <div class="p-3 bg-neutral rounded-lg">
+                            <h3 class="text-sm font-semibold text-gray-800 mb-3">宽度</h3>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <div class="form-item mb-0">
+                                    <label class="form-label">单位</label>
+                                    <select class="input-base" id="sec_widthUnit">
+                                        <option value="cm" selected>cm</option>
+                                        <option value="m">m</option>
+                                    </select>
+                                </div>
+                                <div class="form-item mb-0">
+                                    <label class="form-label">检测值</label>
+                                    <input type="number" step="0.001" class="input-base" id="sec_widthTestValue">
+                                </div>
+                                <div class="form-item mb-0">
+                                    <label class="form-label">设计值</label>
+                                    <input type="number" step="0.001" class="input-base" id="sec_widthDesignValue">
+                                </div>
+                                <div class="form-item mb-0">
+                                    <label class="form-label">偏差值</label>
+                                    <input type="number" step="0.001" class="input-base" id="sec_widthDeviation" readonly>
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-item mb-0">
-                            <label class="form-label">设计值</label>
-                            <input type="number" step="0.001" class="input-base" id="sec_designValue">
+                        <div class="p-3 bg-neutral rounded-lg">
+                            <h3 class="text-sm font-semibold text-gray-800 mb-3">高度</h3>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <div class="form-item mb-0">
+                                    <label class="form-label">单位</label>
+                                    <select class="input-base" id="sec_heightUnit">
+                                        <option value="cm" selected>cm</option>
+                                        <option value="m">m</option>
+                                    </select>
+                                </div>
+                                <div class="form-item mb-0">
+                                    <label class="form-label">检测值</label>
+                                    <input type="number" step="0.001" class="input-base" id="sec_heightTestValue">
+                                </div>
+                                <div class="form-item mb-0">
+                                    <label class="form-label">设计值</label>
+                                    <input type="number" step="0.001" class="input-base" id="sec_heightDesignValue">
+                                </div>
+                                <div class="form-item mb-0">
+                                    <label class="form-label">偏差值</label>
+                                    <input type="number" step="0.001" class="input-base" id="sec_heightDeviation" readonly>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="form-item">
-                        <label class="form-label">偏差值</label>
-                        <input type="number" step="0.001" class="input-base" id="sec_deviation" readonly>
                     </div>
                     <div class="form-item">
                         <label class="form-label">备注</label>
@@ -297,7 +346,7 @@
                             <tr>
                                 <th class="p-2 rounded-l-lg">泵站</th>
                                 <th class="p-2">部位</th>
-                                <th class="p-2">检测值</th>
+                                <th class="p-2">长/宽/高</th>
                                 <th class="p-2 rounded-r-lg">操作</th>
                             </tr>
                         </thead>
@@ -400,7 +449,7 @@
                                 <th class="p-2">部位</th>
                                 <th class="p-2">角度</th>
                                 <th class="p-2">最大强度</th>
-                                <th class="p-2">平均强度</th>
+                                <th class="p-2">最小强度</th>
                                 <th class="p-2 rounded-r-lg">操作</th>
                             </tr>
                         </thead>
@@ -626,14 +675,10 @@
                             <input type="text" class="input-base" id="ele_model">
                         </div>
                     </div>
-                    <div class="grid grid-cols-3 gap-3 mb-4">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
                         <div class="form-item mb-0">
-                            <label class="form-label">绝缘电阻MΩ</label>
-                            <input type="number" step="0.01" class="input-base" id="ele_insulation">
-                        </div>
-                        <div class="form-item mb-0">
-                            <label class="form-label">接地电阻Ω</label>
-                            <input type="number" step="0.01" class="input-base" id="ele_ground">
+                            <label class="form-label">出厂日期</label>
+                            <input type="date" class="input-base" id="ele_produceDate">
                         </div>
                         <div class="form-item mb-0">
                             <label class="form-label">试运行状态</label>
@@ -642,6 +687,16 @@
                                 <option value="正常">正常</option>
                                 <option value="异常">异常</option>
                             </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="form-item mb-0">
+                            <label class="form-label">绝缘电阻MΩ</label>
+                            <input type="number" step="0.01" class="input-base" id="ele_insulation">
+                        </div>
+                        <div class="form-item mb-0">
+                            <label class="form-label">接地电阻Ω</label>
+                            <input type="number" step="0.01" class="input-base" id="ele_ground">
                         </div>
                     </div>
                     <div class="form-item">
@@ -901,8 +956,8 @@
                 <h2 class="text-lg font-bold text-gray-800 mb-4">数据导出</h2>
                 <div class="mb-6">
                     <p class="text-sm text-gray-600 mb-4">点击下方按钮，一键导出所有检测数据为标准Excel文件，完全匹配台账格式</p>
-                    <button id="exportExcelBtn" class="btn-primary mb-3">📊 导出Excel检测台账</button>
-                    <button id="exportPhotoBtn" class="btn-secondary">🖼️ 导出照片压缩包</button>
+                    <button type="button" id="exportExcelBtn" class="btn-primary mb-3">📊 导出Excel检测台账</button>
+                    <button type="button" id="exportPhotoBtn" class="btn-secondary">🖼️ 导出照片压缩包</button>
                 </div>
                 <div class="p-3 bg-neutral rounded-lg">
                     <h3 class="font-medium text-gray-800 mb-2">数据统计</h3>
@@ -945,7 +1000,7 @@
             <div class="bg-white rounded-lg shadow-sm p-4">
                 <h3 class="text-md font-bold text-gray-800 mb-3">数据管理</h3>
                 <div class="space-y-3">
-                    <button id="clearAllDataBtn" class="btn-secondary border-red-500 text-red-500">⚠️ 清空所有本地数据</button>
+                    <button type="button" id="clearAllDataBtn" class="btn-secondary border-red-500 text-red-500">⚠️ 清空所有本地数据</button>
                     <p class="text-xs text-red-500">注意：清空数据后不可恢复，请谨慎操作！</p>
                 </div>
             </div>
@@ -955,8 +1010,8 @@
     <!-- 底部固定操作栏 -->
     <footer class="fixed bottom-0 left-0 right-0 bg-white shadow-lg border-t border-gray-200 p-3 z-50">
         <div class="grid grid-cols-2 gap-3">
-            <button id="prevTabBtn" class="btn-secondary">上一页</button>
-            <button id="nextTabBtn" class="btn-primary">下一页</button>
+            <button type="button" id="prevTabBtn" class="btn-secondary">上一页</button>
+            <button type="button" id="nextTabBtn" class="btn-primary">下一页</button>
         </div>
     </footer>
 
@@ -1034,6 +1089,32 @@
         };
         window.currentPhotoNo = null;
         window.storageWarned = false;
+        const SECTION_DIMENSIONS = [
+            {
+                param: "长度",
+                shortLabel: "长",
+                unitId: "sec_lengthUnit",
+                testId: "sec_lengthTestValue",
+                designId: "sec_lengthDesignValue",
+                deviationId: "sec_lengthDeviation"
+            },
+            {
+                param: "宽度",
+                shortLabel: "宽",
+                unitId: "sec_widthUnit",
+                testId: "sec_widthTestValue",
+                designId: "sec_widthDesignValue",
+                deviationId: "sec_widthDeviation"
+            },
+            {
+                param: "高度",
+                shortLabel: "高",
+                unitId: "sec_heightUnit",
+                testId: "sec_heightTestValue",
+                designId: "sec_heightDesignValue",
+                deviationId: "sec_heightDeviation"
+            }
+        ];
 
         function currentRouteNo() {
             return globalData.selectedStation ? globalData.selectedStation.routeNo : null;
@@ -1059,6 +1140,10 @@
             return el ? el.value : "";
         }
 
+        function hasValue(value) {
+            return value !== undefined && value !== null && value !== "";
+        }
+
         function sameRecordByKeys(item, data, keys) {
             return keys.every(key => (item[key] || "") === (data[key] || ""));
         }
@@ -1072,8 +1157,64 @@
             }
         }
 
+        function removeRecords(type, matcher) {
+            globalData[type] = globalData[type].filter(item => !matcher(item));
+        }
+
         function findRecord(type, matcher) {
             return globalData[type].find(item => item.routeNo === currentRouteNo() && matcher(item));
+        }
+
+        function buildSectionGroups(source) {
+            const groups = new Map();
+            source.forEach(({ item, index }) => {
+                const key = `${item.routeNo}__${item.subProject}__${item.part}`;
+                if (!groups.has(key)) {
+                    groups.set(key, {
+                        index,
+                        routeNo: item.routeNo,
+                        stationName: item.stationName,
+                        subProject: item.subProject,
+                        part: item.part,
+                        remark: item.remark || "",
+                        records: {}
+                    });
+                }
+
+                const group = groups.get(key);
+                group.records[item.param] = item;
+                if (!group.remark && item.remark) {
+                    group.remark = item.remark;
+                }
+            });
+            return Array.from(groups.values());
+        }
+
+        function getSectionGroupsForCurrentStation() {
+            return buildSectionGroups(recordsWithIndex("section"));
+        }
+
+        function getAllSectionGroups() {
+            return buildSectionGroups(globalData.section.map((item, index) => ({ item, index })));
+        }
+
+        function updateSectionDeviation(dimension) {
+            const testValue = getValue(dimension.testId);
+            const designValue = getValue(dimension.designId);
+
+            if (!hasValue(testValue) || !hasValue(designValue)) {
+                setValue(dimension.deviationId, "");
+                return;
+            }
+
+            const test = parseFloat(testValue);
+            const design = parseFloat(designValue);
+            if (Number.isNaN(test) || Number.isNaN(design)) {
+                setValue(dimension.deviationId, "");
+                return;
+            }
+
+            setValue(dimension.deviationId, (test - design).toFixed(3));
         }
 
         // 初始化加载数据
@@ -1163,16 +1304,18 @@
             // 问题编号
             document.getElementById("prob_id").value = globalData.problem.length + 1;
 
-            ["appearance", "section", "rebound", "protective", "safety"].forEach(loadRecordForCurrentPart);
+            syncDependentSelects();
         }
 
         // 渲染部位下拉框
-        function renderPartSelect(type, subProjectKey, partKey) {
+        function renderPartSelect(type, subProjectKey, partKey, preferredValue = "") {
             const subProject = document.getElementById(subProjectKey).value;
             const partSelect = document.getElementById(partKey);
-            
+            const currentValue = preferredValue || partSelect.value;
+
             if (!subProject || !partMap[type][subProject]) {
-                partSelect.innerHTML = '<option value="">请先选分项工程</option>';
+                const placeholder = type === "safety" ? "请先选工程类别" : "请先选分项工程";
+                partSelect.innerHTML = `<option value="">${placeholder}</option>`;
                 loadRecordForCurrentPart(type);
                 return;
             }
@@ -1184,7 +1327,20 @@
                 option.textContent = part;
                 partSelect.appendChild(option);
             });
+
+            if (currentValue && partMap[type][subProject].includes(currentValue)) {
+                partSelect.value = currentValue;
+            }
+
             loadRecordForCurrentPart(type);
+        }
+
+        function syncDependentSelects() {
+            renderPartSelect("appearance", "app_subProject", "app_part");
+            renderPartSelect("section", "sec_subProject", "sec_part");
+            renderPartSelect("rebound", "reb_subProject", "reb_part");
+            renderPartSelect("protective", "pro_subProject", "pro_part");
+            renderPartSelect("safety", "saf_projectType", "saf_subProject");
         }
 
         function clearAppearanceFormFields() {
@@ -1215,11 +1371,12 @@
         }
 
         function clearSectionFormFields() {
-            setValue("sec_param", "宽度");
-            setValue("sec_unit", "m");
-            setValue("sec_testValue", "");
-            setValue("sec_designValue", "");
-            setValue("sec_deviation", "");
+            SECTION_DIMENSIONS.forEach(dimension => {
+                setValue(dimension.unitId, "cm");
+                setValue(dimension.testId, "");
+                setValue(dimension.designId, "");
+                setValue(dimension.deviationId, "");
+            });
             setValue("sec_remark", "");
         }
 
@@ -1260,19 +1417,29 @@
             if (type === "section") {
                 const subProject = getValue("sec_subProject");
                 const part = getValue("sec_part");
-                const param = getValue("sec_param");
-                const record = findRecord("section", item => item.subProject === subProject && item.part === part && (!param || item.param === param));
-                if (!record) {
-                    clearSectionFormFields();
-                    setValue("sec_param", param || "宽度");
+                const records = globalData.section.filter(item =>
+                    item.routeNo === currentRouteNo() &&
+                    item.subProject === subProject &&
+                    item.part === part
+                );
+
+                clearSectionFormFields();
+
+                if (records.length === 0) {
                     return;
                 }
-                setValue("sec_param", record.param);
-                setValue("sec_unit", record.unit);
-                setValue("sec_testValue", record.testValue);
-                setValue("sec_designValue", record.designValue);
-                setValue("sec_deviation", record.deviation);
-                setValue("sec_remark", record.remark);
+
+                SECTION_DIMENSIONS.forEach(dimension => {
+                    const record = records.find(item => item.param === dimension.param);
+                    if (!record) return;
+                    setValue(dimension.unitId, record.unit || "cm");
+                    setValue(dimension.testId, record.testValue);
+                    setValue(dimension.designId, record.designValue);
+                    setValue(dimension.deviationId, record.deviation);
+                });
+
+                const remarkRecord = records.find(item => hasValue(item.remark));
+                setValue("sec_remark", remarkRecord ? remarkRecord.remark : "");
             }
 
             if (type === "rebound") {
@@ -1350,14 +1517,9 @@
             }
             if (type === "section") {
                 setValue("sec_subProject", record.subProject);
-                renderPartSelect("section", "sec_subProject", "sec_part");
+                renderPartSelect("section", "sec_subProject", "sec_part", record.part);
                 setValue("sec_part", record.part);
-                setValue("sec_param", record.param);
-                setValue("sec_unit", record.unit);
-                setValue("sec_testValue", record.testValue);
-                setValue("sec_designValue", record.designValue);
-                setValue("sec_deviation", record.deviation);
-                setValue("sec_remark", record.remark);
+                loadRecordForCurrentPart("section");
             }
             if (type === "rebound") {
                 setValue("reb_subProject", record.subProject);
@@ -1490,15 +1652,31 @@
         function renderSectionTable() {
             const tbody = document.getElementById("sectionTableBody");
             tbody.innerHTML = '';
-            recordsWithIndex("section").forEach(({ item, index }) => {
+            getSectionGroupsForCurrentStation().forEach(group => {
+                const primarySummary = SECTION_DIMENSIONS.map(dimension => {
+                    const record = group.records[dimension.param];
+                    const value = record && hasValue(record.testValue)
+                        ? record.testValue
+                        : (record && hasValue(record.designValue) ? record.designValue : "-");
+                    return record && value !== "-"
+                        ? `${dimension.shortLabel}${value}${record.unit || ""}`
+                        : `${dimension.shortLabel}-`;
+                });
+                const extraSummary = Object.values(group.records)
+                    .filter(record => !SECTION_DIMENSIONS.some(dimension => dimension.param === record.param))
+                    .map(record => {
+                        const value = hasValue(record.testValue) ? record.testValue : (hasValue(record.designValue) ? record.designValue : "-");
+                        return `${record.param}${value}${record.unit || ""}`;
+                    });
+                const summary = [...primarySummary, ...extraSummary].join(" / ");
                 const tr = document.createElement("tr");
                 tr.innerHTML = `
-                    <td class="p-2">${item.stationName}</td>
-                    <td class="p-2">${item.part}</td>
-                    <td class="p-2">${item.testValue}${item.unit}</td>
+                    <td class="p-2">${group.stationName}</td>
+                    <td class="p-2">${group.part}</td>
+                    <td class="p-2">${summary}</td>
                     <td class="p-2">
-                        <button type="button" data-index="${index}" data-type="section" class="editBtn text-primary text-sm mr-2">编辑</button>
-                        <button type="button" data-index="${index}" data-type="section" class="deleteBtn text-red-500 text-sm">删除</button>
+                        <button type="button" data-index="${group.index}" data-type="section" class="editBtn text-primary text-sm mr-2">编辑</button>
+                        <button type="button" data-index="${group.index}" data-type="section" class="deleteBtn text-red-500 text-sm">删除</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -1516,7 +1694,7 @@
                     <td class="p-2">${item.part}</td>
                     <td class="p-2">${item.angle || '水平'}</td>
                     <td class="p-2">${item.maxStrength || '-'}MPa</td>
-                    <td class="p-2">${item.avgStrength || '-'}MPa</td>
+                    <td class="p-2">${item.minStrength || '-'}MPa</td>
                     <td class="p-2">
                         <button type="button" data-index="${index}" data-type="rebound" class="editBtn text-primary text-sm mr-2">编辑</button>
                         <button type="button" data-index="${index}" data-type="rebound" class="deleteBtn text-red-500 text-sm">删除</button>
@@ -1625,7 +1803,7 @@
         // 更新统计数字
         function updateCount() {
             document.getElementById("count_appearance").textContent = globalData.appearance.length;
-            document.getElementById("count_section").textContent = globalData.section.length;
+            document.getElementById("count_section").textContent = getAllSectionGroups().length;
             document.getElementById("count_rebound").textContent = globalData.rebound.length;
             document.getElementById("count_protective").textContent = globalData.protective.length;
             document.getElementById("count_metal").textContent = globalData.metal.length;
@@ -1724,9 +1902,10 @@
 
             // 9. 报告文本速填Sheet
             const reportHeader = ["路线序号", "泵站名称", "工程概况句", "外观质量汇总句", "断面尺寸汇总句", "强度汇总句", "保护层汇总句", "金属结构句", "机械电气句", "结论句", "备注"];
+            const allSectionGroups = getAllSectionGroups();
             const reportData = pumpStations.map(station => {
                 const appCount = globalData.appearance.filter(i => i.routeNo == station.routeNo).length;
-                const secCount = globalData.section.filter(i => i.routeNo == station.routeNo).length;
+                const secCount = allSectionGroups.filter(group => group.routeNo == station.routeNo).length;
                 const rebCount = globalData.rebound.filter(i => i.routeNo == station.routeNo).length;
                 const proCount = globalData.protective.filter(i => i.routeNo == station.routeNo).length;
                 return [
@@ -1839,9 +2018,6 @@
             document.getElementById("sec_part").addEventListener("change", function() {
                 loadRecordForCurrentPart("section");
             });
-            document.getElementById("sec_param").addEventListener("change", function() {
-                loadRecordForCurrentPart("section");
-            });
 
             // 回弹碳化分项工程变化
             document.getElementById("reb_subProject").addEventListener("change", function() {
@@ -1868,11 +2044,11 @@
             });
 
             // 断面尺寸自动计算偏差
-            ["sec_testValue", "sec_designValue"].forEach(id => {
-                document.getElementById(id).addEventListener("input", function() {
-                    const test = parseFloat(document.getElementById("sec_testValue").value) || 0;
-                    const design = parseFloat(document.getElementById("sec_designValue").value) || 0;
-                    document.getElementById("sec_deviation").value = (test - design).toFixed(3);
+            SECTION_DIMENSIONS.forEach(dimension => {
+                [dimension.testId, dimension.designId].forEach(id => {
+                    document.getElementById(id).addEventListener("input", function() {
+                        updateSectionDeviation(dimension);
+                    });
                 });
             });
 
@@ -1955,20 +2131,49 @@
                     return;
                 }
 
-                const data = {
-                    routeNo: globalData.selectedStation.routeNo,
-                    stationName: globalData.selectedStation.name,
-                    subProject: document.getElementById("sec_subProject").value,
-                    part: document.getElementById("sec_part").value,
-                    param: document.getElementById("sec_param").value,
-                    unit: document.getElementById("sec_unit").value,
-                    testValue: document.getElementById("sec_testValue").value,
-                    designValue: document.getElementById("sec_designValue").value,
-                    deviation: document.getElementById("sec_deviation").value,
-                    remark: document.getElementById("sec_remark").value
-                };
+                const routeNo = globalData.selectedStation.routeNo;
+                const stationName = globalData.selectedStation.name;
+                const subProject = document.getElementById("sec_subProject").value;
+                const part = document.getElementById("sec_part").value;
+                const remark = document.getElementById("sec_remark").value;
+                let hasAnyDimension = false;
 
-                upsertRecord("section", data, ["routeNo", "subProject", "part", "param"]);
+                SECTION_DIMENSIONS.forEach(dimension => {
+                    const testValue = getValue(dimension.testId);
+                    const designValue = getValue(dimension.designId);
+                    const deviation = getValue(dimension.deviationId);
+                    const unit = getValue(dimension.unitId) || "cm";
+                    const hasData = hasValue(testValue) || hasValue(designValue);
+
+                    if (hasData) {
+                        hasAnyDimension = true;
+                        upsertRecord("section", {
+                            routeNo,
+                            stationName,
+                            subProject,
+                            part,
+                            param: dimension.param,
+                            unit,
+                            testValue,
+                            designValue,
+                            deviation,
+                            remark
+                        }, ["routeNo", "subProject", "part", "param"]);
+                    } else {
+                        removeRecords("section", item =>
+                            item.routeNo === routeNo &&
+                            item.subProject === subProject &&
+                            item.part === part &&
+                            item.param === dimension.param
+                        );
+                    }
+                });
+
+                if (!hasAnyDimension) {
+                    alert("请至少填写一组长宽高数据！");
+                    return;
+                }
+
                 saveData();
                 renderStationInfo(globalData.selectedStation);
                 loadRecordForCurrentPart("section");
@@ -2198,9 +2403,20 @@
                 }
                 if (e.target.classList.contains("deleteBtn")) {
                     const type = e.target.dataset.type;
-                    const index = e.target.dataset.index;
+                    const index = Number(e.target.dataset.index);
                     if (confirm("确定要删除这条记录吗？")) {
-                        globalData[type].splice(index, 1);
+                        if (type === "section") {
+                            const record = globalData.section[index];
+                            if (record) {
+                                removeRecords("section", item =>
+                                    item.routeNo === record.routeNo &&
+                                    item.subProject === record.subProject &&
+                                    item.part === record.part
+                                );
+                            }
+                        } else {
+                            globalData[type].splice(index, 1);
+                        }
                         saveData();
                     }
                 }
