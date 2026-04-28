@@ -109,7 +109,9 @@
                             <tr>
                                 <th class="p-2 rounded-l-lg">序号</th>
                                 <th class="p-2">泵站名称</th>
-                                <th class="p-2 rounded-r-lg">设计流量</th>
+                                <th class="p-2">设计流量</th>
+                                <th class="p-2">状态</th>
+                                <th class="p-2 rounded-r-lg">操作</th>
                             </tr>
                         </thead>
                         <tbody id="stationTableBody" class="divide-y divide-gray-100">
@@ -139,11 +141,14 @@
                             <label class="form-label">分项工程</label>
                             <select class="input-base" id="app_subProject" required>
                                 <option value="">请选择</option>
+                                <option value="总体">总体</option>
                                 <option value="排水闸">排水闸</option>
                                 <option value="进水池">进水池</option>
                                 <option value="进水闸">进水闸</option>
+                                <option value="穿堤涵">穿堤涵</option>
                                 <option value="压力箱">压力箱</option>
-                                <option value="金属结构/机械电气">金属结构/机械电气</option>
+                                <option value="金属结构">金属结构</option>
+                                <option value="机械电气">机械电气</option>
                             </select>
                         </div>
                         <div class="form-item mb-0">
@@ -184,11 +189,11 @@
                         <div class="grid grid-cols-2 gap-3">
                             <input type="file" id="app_camera" accept="image/*" capture="camera" class="hidden">
                             <button type="button" id="app_takePhoto" class="btn-secondary">📷 拍摄照片</button>
-                            <button type="button" id="app_clearPhoto" class="btn-secondary">清除照片</button>
+                            <button type="button" id="app_clearPhoto" class="btn-secondary">清空当前部位照片</button>
                         </div>
                         <div id="app_photoPreview" class="mt-3 hidden">
-                            <p class="text-xs text-gray-500 mb-1">照片预览（编号：<span id="app_photoNo"></span>）</p>
-                            <img id="app_photoImg" class="w-full h-40 object-contain border rounded-lg" src="" alt="现场照片">
+                            <p class="text-xs text-gray-500 mb-2">当前部位照片（<span id="app_photoCount">0</span>张）</p>
+                            <div id="app_photoList" class="space-y-3"></div>
                         </div>
                     </div>
                     <div class="form-item">
@@ -244,6 +249,7 @@
                                 <option value="排水闸">排水闸</option>
                                 <option value="进水池">进水池</option>
                                 <option value="进水闸">进水闸</option>
+                                <option value="穿堤涵">穿堤涵</option>
                             </select>
                         </div>
                         <div class="form-item mb-0">
@@ -380,6 +386,7 @@
                                 <option value="排水闸">排水闸</option>
                                 <option value="进水池">进水池</option>
                                 <option value="进水闸">进水闸</option>
+                                <option value="穿堤涵">穿堤涵</option>
                                 <option value="压力箱">压力箱</option>
                             </select>
                         </div>
@@ -483,6 +490,7 @@
                                 <option value="排水闸">排水闸</option>
                                 <option value="进水池">进水池</option>
                                 <option value="进水闸">进水闸</option>
+                                <option value="穿堤涵">穿堤涵</option>
                                 <option value="压力箱">压力箱</option>
                             </select>
                         </div>
@@ -563,11 +571,17 @@
                             <label class="form-label">设备类别</label>
                             <select class="input-base" id="met_deviceType" required>
                                 <option value="">请选择</option>
-                                <option value="排水闸闸门">排水闸闸门</option>
                                 <option value="进水闸闸门">进水闸闸门</option>
-                                <option value="启闭机">启闭机</option>
+                                <option value="进水闸启闭机">进水闸启闭机</option>
+                                <option value="进水池闸门">进水池闸门</option>
+                                <option value="进水池启闭机">进水池启闭机</option>
+                                <option value="排水闸闸门">排水闸闸门</option>
+                                <option value="排水闸启闭机">排水闸启闭机</option>
+                                <option value="穿堤涵闸门">穿堤涵闸门</option>
+                                <option value="穿堤涵启闭机">穿堤涵启闭机</option>
+                                <option value="钢管">钢管</option>
                                 <option value="拦污栅">拦污栅</option>
-                                <option value="钢管/拍门">钢管/拍门</option>
+                                <option value="拍门">拍门</option>
                             </select>
                         </div>
                         <div class="form-item mb-0">
@@ -1043,27 +1057,33 @@
         // 检测部位映射
         const partMap = {
             appearance: {
+                "总体": ["总体"],
                 "排水闸": ["工作桥桥面", "启闭机操作平台", "排架柱", "闸墩/边墙", "胸墙/挡墙", "出口护坡/底板"],
                 "进水池": ["左侧护坡/挡墙", "右侧护坡/挡墙", "泵站墩柱"],
                 "进水闸": ["操作平台/工作桥", "闸墩/门槽", "排架柱", "护坡/挡墙"],
-                "压力箱": ["左边墙", "右边墙", "底板", "分水墩"],
-                "金属结构/机械电气": ["闸门", "启闭机", "拦污栅", "水泵及钢管", "电动机及配电柜"]
+                "穿堤涵": ["整体", "进口", "出口", "工作桥桥面", "启闭机操作平台", "排架柱", "闸墩/边墙", "胸墙/挡墙", "出口护坡/底板"],
+                "压力箱": ["整体", "左边墙", "右边墙", "底板", "分水墩"],
+                "金属结构": ["进水闸闸门", "进水闸启闭机", "进水池闸门", "进水池启闭机", "排水闸闸门", "排水闸启闭机", "穿堤涵闸门", "穿堤涵启闭机", "钢管"],
+                "机械电气": ["水泵", "电动机", "配电柜"]
             },
             section: {
                 "排水闸": ["工作桥桥面", "启闭机操作平台", "排架柱", "闸墩/边墙", "胸墙/挡墙", "出口护坡/底板"],
                 "进水池": ["左侧护坡/挡墙", "右侧护坡/挡墙"],
-                "进水闸": ["操作平台/工作桥", "闸墩/门槽"]
+                "进水闸": ["操作平台/工作桥", "闸墩/门槽"],
+                "穿堤涵": ["出水口孔口"]
             },
             rebound: {
                 "排水闸": ["工作桥桥面", "启闭机操作平台", "排架柱", "闸墩/边墙", "胸墙/挡墙"],
                 "进水池": ["左侧护坡/挡墙", "右侧护坡/挡墙", "泵站墩柱"],
                 "进水闸": ["操作平台/工作桥", "闸墩/门槽", "排架柱", "护坡/挡墙"],
+                "穿堤涵": ["出口左护坡", "出口右护坡", "出口左边墙", "出口右边墙", "涵洞左边墙", "涵洞右边墙", "涵洞顶", "混凝土闸门", "排架柱", "出口左侧闸墩", "出口右侧闸墩", "启闭机操作平台", "交通桥"],
                 "压力箱": ["左边墙", "右边墙"]
             },
             protective: {
                 "排水闸": ["工作桥桥面", "启闭机操作平台"],
                 "进水池": ["左侧护坡/挡墙", "右侧护坡/挡墙"],
                 "进水闸": ["操作平台/工作桥", "闸墩/门槽"],
+                "穿堤涵": ["出口左护坡", "出口右护坡", "出口左边墙", "出口右边墙", "涵洞左边墙", "涵洞右边墙", "涵洞顶", "混凝土闸门", "排架柱", "出口左侧闸墩", "出口右侧闸墩", "启闭机操作平台", "交通桥"],
                 "压力箱": ["左边墙", "右边墙"]
             },
             safety: {
@@ -1087,7 +1107,7 @@
             problem: [],
             photos: []
         };
-        window.currentPhotoNo = null;
+        window.currentAppearancePhotoNos = [];
         window.storageWarned = false;
         const SECTION_DIMENSIONS = [
             {
@@ -1120,8 +1140,18 @@
             return globalData.selectedStation ? globalData.selectedStation.routeNo : null;
         }
 
+        function getNextProblemId() {
+            return globalData.problem.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
+        }
+
         function isCurrentStation(item) {
             return !currentRouteNo() || item.routeNo === currentRouteNo();
+        }
+
+        function stationHasData(routeNo) {
+            const collections = ["appearance", "section", "rebound", "protective", "metal", "electrical", "safety", "problem"];
+            return collections.some(type => globalData[type].some(item => item.routeNo === routeNo)) ||
+                globalData.photos.some(item => item.routeNo === routeNo);
         }
 
         function recordsWithIndex(type) {
@@ -1163,6 +1193,103 @@
 
         function findRecord(type, matcher) {
             return globalData[type].find(item => item.routeNo === currentRouteNo() && matcher(item));
+        }
+
+        function normalizeAppearancePhotoNos(record) {
+            if (!record) return [];
+            if (Array.isArray(record.photoNos)) {
+                return record.photoNos.filter(Boolean);
+            }
+            return record.photoNo ? [record.photoNo] : [];
+        }
+
+        function setCurrentAppearancePhotoNos(photoNos) {
+            window.currentAppearancePhotoNos = [...new Set((photoNos || []).filter(Boolean))];
+            renderAppearancePhotoList();
+        }
+
+        function currentAppearancePhotos() {
+            return (window.currentAppearancePhotoNos || [])
+                .map(photoNo => globalData.photos.find(item => item.photoNo === photoNo))
+                .filter(Boolean);
+        }
+
+        function syncAppearanceRecordPhotos(routeNo, subProject, part, photoNos) {
+            const record = globalData.appearance.find(item =>
+                item.routeNo === routeNo &&
+                item.subProject === subProject &&
+                item.part === part
+            );
+            if (!record) return;
+            const normalized = [...new Set((photoNos || []).filter(Boolean))];
+            record.photoNos = normalized;
+            record.photoNo = normalized[0] || "";
+        }
+
+        function deleteAppearancePhoto(photoNo, options = {}) {
+            const { silent = false } = options;
+            const photo = globalData.photos.find(item => item.photoNo === photoNo);
+            if (!photo) return;
+
+            globalData.photos = globalData.photos.filter(item => item.photoNo !== photoNo);
+            setCurrentAppearancePhotoNos((window.currentAppearancePhotoNos || []).filter(item => item !== photoNo));
+
+            globalData.appearance.forEach(record => {
+                const photoNos = normalizeAppearancePhotoNos(record).filter(item => item !== photoNo);
+                record.photoNos = photoNos;
+                record.photoNo = photoNos[0] || "";
+            });
+
+            if (!silent) {
+                saveData();
+            }
+        }
+
+        function renderAppearancePhotoList() {
+            const wrapper = document.getElementById("app_photoPreview");
+            const list = document.getElementById("app_photoList");
+            const count = document.getElementById("app_photoCount");
+            const photos = currentAppearancePhotos();
+
+            count.textContent = String(photos.length);
+            list.innerHTML = "";
+
+            if (photos.length === 0) {
+                wrapper.classList.add("hidden");
+                return;
+            }
+
+            photos.forEach(photo => {
+                const card = document.createElement("div");
+                card.className = "border border-gray-200 rounded-lg p-3 bg-white";
+                card.innerHTML = `
+                    <div class="flex items-start justify-between gap-3 mb-2">
+                        <div>
+                            <p class="text-sm font-medium text-gray-800">${photo.photoNo}</p>
+                            <p class="text-xs text-gray-500">${photo.subject || ""}</p>
+                        </div>
+                        <button type="button" data-photono="${photo.photoNo}" class="appearancePhotoDeleteBtn text-red-500 text-sm whitespace-nowrap">删除照片</button>
+                    </div>
+                    <img class="w-full h-40 object-contain border rounded-lg bg-gray-50 mb-2" src="${photo.base64}" alt="现场照片">
+                    <input type="text" data-photono="${photo.photoNo}" class="appearancePhotoRemarkInput input-base" value="${photo.remark || ""}" placeholder="填写这张照片的备注">
+                `;
+                list.appendChild(card);
+            });
+
+            wrapper.classList.remove("hidden");
+        }
+
+        function clearCurrentAppearancePhotos() {
+            const photoNos = [...(window.currentAppearancePhotoNos || [])];
+            photoNos.forEach(photoNo => deleteAppearancePhoto(photoNo, { silent: true }));
+            setCurrentAppearancePhotoNos([]);
+            saveData();
+        }
+
+        function clearStationData(routeNo) {
+            ["appearance", "section", "rebound", "protective", "metal", "electrical", "safety", "problem", "photos"].forEach(type => {
+                globalData[type] = globalData[type].filter(item => item.routeNo !== routeNo);
+            });
         }
 
         function buildSectionGroups(source) {
@@ -1226,6 +1353,11 @@
             renderStationList();
             renderAllTables();
             updateCount();
+            if (!globalData.selectedStation) {
+                document.getElementById("stationBaseInfo").classList.add("hidden");
+                document.getElementById("prob_id").value = getNextProblemId();
+                hideAppearancePhoto();
+            }
         }
 
         // 保存数据到本地
@@ -1239,12 +1371,14 @@
                     alert("记录已在当前页面中更新，但浏览器本地存储可能已满。建议先导出Excel/照片，或减少照片数量后继续。");
                 }
             }
+            renderStationList({ syncSelectedStation: false });
             renderAllTables();
             updateCount();
         }
 
         // 渲染泵站列表
-        function renderStationList() {
+        function renderStationList(options = {}) {
+            const { syncSelectedStation = true } = options;
             const select = document.getElementById("pumpStationSelect");
             const tbody = document.getElementById("stationTableBody");
             
@@ -1253,18 +1387,27 @@
             tbody.innerHTML = '';
 
             pumpStations.forEach(station => {
+                const hasData = stationHasData(station.routeNo);
+
                 // 下拉框
                 const option = document.createElement("option");
                 option.value = station.routeNo;
-                option.textContent = station.name;
+                option.textContent = hasData ? `${station.name}（已录入）` : station.name;
                 select.appendChild(option);
 
                 // 表格
                 const tr = document.createElement("tr");
+                tr.className = hasData ? "bg-green-50" : "";
                 tr.innerHTML = `
-                    <td class="p-2">${station.routeNo}</td>
-                    <td class="p-2">${station.name}</td>
+                    <td class="p-2 ${hasData ? 'text-green-700 font-medium' : ''}">${station.routeNo}</td>
+                    <td class="p-2 ${hasData ? 'text-green-700 font-medium' : ''}">${station.name}</td>
                     <td class="p-2">${station.designFlow}</td>
+                    <td class="p-2">
+                        <span class="text-sm ${hasData ? 'text-green-600 font-medium' : 'text-gray-400'}">${hasData ? "已录入" : "未录入"}</span>
+                    </td>
+                    <td class="p-2">
+                        <button type="button" data-route-no="${station.routeNo}" class="clearStationBtn text-sm ${hasData ? 'text-red-500' : 'text-gray-300 cursor-not-allowed'}" ${hasData ? "" : "disabled"}>清除数据</button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -1272,7 +1415,9 @@
             // 选中已选泵站
             if (globalData.selectedStation) {
                 select.value = globalData.selectedStation.routeNo;
-                renderStationInfo(globalData.selectedStation);
+                if (syncSelectedStation) {
+                    renderStationInfo(globalData.selectedStation);
+                }
             }
         }
 
@@ -1302,7 +1447,7 @@
             });
 
             // 问题编号
-            document.getElementById("prob_id").value = globalData.problem.length + 1;
+            document.getElementById("prob_id").value = getNextProblemId();
 
             syncDependentSelects();
         }
@@ -1352,22 +1497,16 @@
 
         function hideAppearancePhoto() {
             document.getElementById("app_camera").value = "";
-            document.getElementById("app_photoNo").textContent = "";
-            document.getElementById("app_photoImg").src = "";
-            document.getElementById("app_photoPreview").classList.add("hidden");
-            window.currentPhotoNo = null;
+            setCurrentAppearancePhotoNos([]);
         }
 
-        function showAppearancePhoto(photoNo) {
-            const photo = globalData.photos.find(item => item.photoNo === photoNo);
-            if (!photo || !photo.base64) {
+        function showAppearancePhotos(photoNos) {
+            const normalized = [...new Set((photoNos || []).filter(Boolean))];
+            if (normalized.length === 0) {
                 hideAppearancePhoto();
                 return;
             }
-            document.getElementById("app_photoNo").textContent = photo.photoNo;
-            document.getElementById("app_photoImg").src = photo.base64;
-            document.getElementById("app_photoPreview").classList.remove("hidden");
-            window.currentPhotoNo = photo.photoNo;
+            setCurrentAppearancePhotoNos(normalized);
         }
 
         function clearSectionFormFields() {
@@ -1411,7 +1550,8 @@
                 setValue("app_material", record.material);
                 setValue("app_result", record.result);
                 setValue("app_remark", record.remark);
-                record.photoNo ? showAppearancePhoto(record.photoNo) : hideAppearancePhoto();
+                const photoNos = normalizeAppearancePhotoNos(record);
+                photoNos.length > 0 ? showAppearancePhotos(photoNos) : hideAppearancePhoto();
             }
 
             if (type === "section") {
@@ -1508,12 +1648,13 @@
 
             if (type === "appearance") {
                 setValue("app_subProject", record.subProject);
-                renderPartSelect("appearance", "app_subProject", "app_part");
+                renderPartSelect("appearance", "app_subProject", "app_part", record.part);
                 setValue("app_part", record.part);
                 setValue("app_material", record.material);
                 setValue("app_result", record.result);
                 setValue("app_remark", record.remark);
-                record.photoNo ? showAppearancePhoto(record.photoNo) : hideAppearancePhoto();
+                const photoNos = normalizeAppearancePhotoNos(record);
+                photoNos.length > 0 ? showAppearancePhotos(photoNos) : hideAppearancePhoto();
             }
             if (type === "section") {
                 setValue("sec_subProject", record.subProject);
@@ -1839,7 +1980,7 @@
             // 1. 外观检测Sheet
             const appearanceHeader = ["路线序号", "泵站名称", "报告表号", "序号", "分项工程", "检测部位", "材质类型", "检测结果", "检测日期", "检测人", "照片编号", "是否关键项", "备注"];
             const appearanceData = globalData.appearance.map((item, idx) => [
-                item.routeNo, item.stationName, `表${item.routeNo}-3-1`, idx+1, item.subProject, item.part, item.material, item.result, '', '', item.photoNo || '', '否', item.remark
+                item.routeNo, item.stationName, `表${item.routeNo}-3-1`, idx+1, item.subProject, item.part, item.material, item.result, '', '', normalizeAppearancePhotoNos(item).join("、"), '否', item.remark
             ]);
             const appearanceWs = XLSX.utils.aoa_to_sheet([appearanceHeader, ...appearanceData]);
             XLSX.utils.book_append_sheet(wb, appearanceWs, "06外观检测");
@@ -1928,7 +2069,7 @@
             // 10. 照片编号清单Sheet
             const photoHeader = ["路线序号", "泵站名称", "照片编号", "报告图号", "拍摄对象", "远景/近景", "是否入报告", "照片说明/图名", "备注"];
             const photoData = globalData.photos.map((item, idx) => [
-                item.routeNo, item.stationName, item.photoNo, item.figureNo, item.subject, item.viewType, item.inReport, item.desc, ''
+                item.routeNo, item.stationName, item.photoNo, item.figureNo, item.subject, item.viewType, item.inReport, item.desc, item.remark || ''
             ]);
             const photoWs = XLSX.utils.aoa_to_sheet([photoHeader, ...photoData]);
             XLSX.utils.book_append_sheet(wb, photoWs, "16照片编号清单");
@@ -2054,6 +2195,14 @@
 
             // 外观拍照功能
             document.getElementById("app_takePhoto").addEventListener("click", function() {
+                if (!globalData.selectedStation) {
+                    alert("请先选择泵站！");
+                    return;
+                }
+                if (!getValue("app_subProject") || !getValue("app_part")) {
+                    alert("请先选择分项工程和检测部位后再拍照！");
+                    return;
+                }
                 document.getElementById("app_camera").click();
             });
 
@@ -2063,7 +2212,8 @@
 
                 resizeImageForStorage(file, function(base64) {
                     const photoNo = `PHOTO_${globalData.selectedStation.routeNo}_${Date.now().toString().slice(-6)}`;
-                    const figureNo = `图${globalData.selectedStation.routeNo}-3-${globalData.appearance.length + 1}`;
+                    const figureNo = `图${globalData.selectedStation.routeNo}-3-${globalData.photos.length + 1}`;
+                    const subProject = document.getElementById("app_subProject").value;
                     const partValue = document.getElementById("app_part").value;
                     
                     // 保存照片
@@ -2072,28 +2222,49 @@
                         stationName: globalData.selectedStation.name,
                         photoNo: photoNo,
                         figureNo: figureNo,
-                        subject: `${document.getElementById("app_subProject").value}-${document.getElementById("app_part").value}`,
+                        formType: "appearance",
+                        subProject: subProject,
+                        part: partValue,
+                        subject: `${subProject}-${partValue}`,
                         viewType: "近景",
                         inReport: "是",
                         desc: `${partValue}现场检测照片`,
+                        remark: "",
                         base64: base64
                     });
 
-                    // 预览
-                    document.getElementById("app_photoNo").textContent = photoNo;
-                    document.getElementById("app_photoImg").src = base64;
-                    document.getElementById("app_photoPreview").classList.remove("hidden");
-                    window.currentPhotoNo = photoNo;
-
+                    setCurrentAppearancePhotoNos([...(window.currentAppearancePhotoNos || []), photoNo]);
+                    syncAppearanceRecordPhotos(globalData.selectedStation.routeNo, subProject, partValue, window.currentAppearancePhotoNos);
                     saveData();
+                    document.getElementById("app_camera").value = "";
                 });
             });
 
             // 清除照片
             document.getElementById("app_clearPhoto").addEventListener("click", function() {
-                document.getElementById("app_camera").value = '';
-                document.getElementById("app_photoPreview").classList.add("hidden");
-                window.currentPhotoNo = null;
+                if ((window.currentAppearancePhotoNos || []).length === 0) {
+                    return;
+                }
+                if (confirm("确定要清空当前部位的所有照片吗？")) {
+                    clearCurrentAppearancePhotos();
+                }
+            });
+
+            document.getElementById("app_photoList").addEventListener("input", function(e) {
+                if (!e.target.classList.contains("appearancePhotoRemarkInput")) return;
+                const photoNo = e.target.dataset.photono;
+                const photo = globalData.photos.find(item => item.photoNo === photoNo);
+                if (!photo) return;
+                photo.remark = e.target.value;
+            });
+
+            document.getElementById("app_photoList").addEventListener("change", function(e) {
+                if (!e.target.classList.contains("appearancePhotoRemarkInput")) return;
+                const photoNo = e.target.dataset.photono;
+                const photo = globalData.photos.find(item => item.photoNo === photoNo);
+                if (!photo) return;
+                photo.remark = e.target.value;
+                saveData();
             });
 
             // 表单提交事件
@@ -2112,7 +2283,8 @@
                     part: document.getElementById("app_part").value,
                     material: document.getElementById("app_material").value,
                     result: document.getElementById("app_result").value,
-                    photoNo: window.currentPhotoNo || '',
+                    photoNos: [...(window.currentAppearancePhotoNos || [])],
+                    photoNo: (window.currentAppearancePhotoNos || [])[0] || '',
                     remark: document.getElementById("app_remark").value
                 };
 
@@ -2329,7 +2501,7 @@
                 }
 
                 const data = {
-                    id: globalData.problem.length + 1,
+                    id: getNextProblemId(),
                     routeNo: globalData.selectedStation.routeNo,
                     stationName: globalData.selectedStation.name,
                     type: document.getElementById("prob_type").value,
@@ -2354,8 +2526,7 @@
             // 重置按钮事件
             document.getElementById("app_reset").addEventListener("click", function() {
                 document.getElementById("appearanceForm").reset();
-                document.getElementById("app_photoPreview").classList.add("hidden");
-                window.currentPhotoNo = null;
+                hideAppearancePhoto();
                 renderStationInfo(globalData.selectedStation);
             });
 
@@ -2401,6 +2572,27 @@
                     const index = Number(e.target.dataset.index);
                     loadRecordByIndex(type, index);
                 }
+                if (e.target.classList.contains("appearancePhotoDeleteBtn")) {
+                    const photoNo = e.target.dataset.photono;
+                    if (confirm("确定要删除这张照片吗？")) {
+                        deleteAppearancePhoto(photoNo);
+                    }
+                }
+                if (e.target.classList.contains("clearStationBtn")) {
+                    if (e.target.disabled) {
+                        return;
+                    }
+                    const routeNo = Number(e.target.dataset.routeNo);
+                    const station = pumpStations.find(item => item.routeNo === routeNo);
+                    if (!station) return;
+                    if (confirm(`确定要清除“${station.name}”的全部检测数据吗？`)) {
+                        clearStationData(routeNo);
+                        saveData();
+                        if (globalData.selectedStation && globalData.selectedStation.routeNo === routeNo) {
+                            renderStationInfo(globalData.selectedStation);
+                        }
+                    }
+                }
                 if (e.target.classList.contains("deleteBtn")) {
                     const type = e.target.dataset.type;
                     const index = Number(e.target.dataset.index);
@@ -2414,6 +2606,12 @@
                                     item.part === record.part
                                 );
                             }
+                        } else if (type === "appearance") {
+                            const record = globalData.appearance[index];
+                            if (record) {
+                                normalizeAppearancePhotoNos(record).forEach(photoNo => deleteAppearancePhoto(photoNo, { silent: true }));
+                            }
+                            globalData[type].splice(index, 1);
                         } else {
                             globalData[type].splice(index, 1);
                         }
